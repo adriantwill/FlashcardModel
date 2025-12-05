@@ -1,0 +1,1376 @@
+CSE 471
+Introduction to Artificial Intelligence
+YooJung Choi
+Spring 2025
+
+
+Probabilistic graphical models (PGMs)
+• Two problems with using full joint distribution tables as our probabilistic models:
+• Other than very simple cases, the joint distribution table is too big to represent explicitly
+• Hard to learn (estimate) anything empirically about more than a few variables at a time
+• PGMs use a graphical structure to more concisely represent distributions
+• Bayesian networks: directed PGM exploiting (conditional) independence
+• Describe complex joint distributions using simple, local distributions (conditional probabilities)
+• Local interactions chain together to give global, indirect interactions
+
+
+BN application: medical diagnosis
+A Bayesian Network Model for Diagnosis of Liver Disorders – Agnieszka Onisko, M.S., Marek J. Druzdzel, Ph.D., and Hanna Wasyluk, 
+M.D.,Ph.D.- September 1999.
+
+
+BN application: insurance
+
+
+Bayesian network structure
+• Nodes: variables (with domains)
+• Can be observed or unobserved
+• Arcs: interactions between variables
+• Indicate “direct influence” between variables
+• Formally: encode conditional independence (more later)
+• Intuition: it helps to think of arrows as direct causation (though in general, they don’t)
+
+
+Coin flips
+• N independent coin flips
+• No interaction between variables: absolute independence
+X1
+X2
+Xn
+
+
+Traffic
+• Variables: 
+• Why is an agent using model 2 better?
+• Model 1: independence
+• Model 2: rain causes traffic
+R
+T
+R
+T
+R: it rains
+T: there is traffic
+
+
+Alarm network
+• Variables: 
+• A burglar or an earthquake may set the alarm off
+• The alarm can cause neighbor John or Mary to call
+B: Burglary
+A: Alarm goes off
+M: Mary calls
+J: John calls
+E: Earthquake
+B
+A
+E
+M
+J
+
+
+Bayesian network semantics
+• A set of nodes, one per variable 
+• A directed acyclic graph
+• A conditional distribution for each node
+• P( X | parents(X))
+• CPT: conditional probability table
+• Description of a noisy “causal” process
+• BN = graph (topology) + local conditional probabilities
+A1
+X
+An
+
+
+Probabilities in BNs
+• Bayesian networks implicitly encode joint distributions As a product of local conditional distributions
+𝑃𝑥1, … , 𝑥𝑛= ෑ
+𝑖=1
+𝑛
+𝑃𝑥𝑖𝑝𝑎𝑟𝑒𝑛𝑡𝑠𝑋𝑖)
+• Check: Are we guaranteed that this results in a valid joint distribution?
+• Chain rule (valid for all distributions): Repeated application of product rule
+• 𝑃𝑥1, 𝑥2, … , 𝑥𝑛= 𝑃𝑥𝑛𝑥1, … , 𝑥𝑛−1 𝑃𝑥1, … , 𝑥𝑛−1
+• Note: this implies conditional independences: 𝑃𝑥𝑖𝑥1, … , 𝑥𝑖−1) = 𝑃𝑥𝑖𝑝𝑎𝑟𝑒𝑛𝑡𝑠𝑋𝑖)    (more on this later)
+= 𝑃𝑥𝑛𝑥1, … , 𝑥𝑛−1 𝑃𝑥𝑛−1 𝑥1, … , 𝑥𝑛−2 𝑃𝑥1, … , 𝑥𝑛−2
+= ⋯= ෑ
+𝑖=1
+𝑛
+𝑃𝑥𝑖𝑥1, … , 𝑥𝑖−1)
+
+
+Coin flips
+Only distributions whose variables are absolutely 
+independent can be represented by a BN with no arcs.
+h
+0.5
+t
+0.5
+h
+0.5
+t
+0.5
+h
+0.5
+t
+0.5
+X1
+X2
+Xn
+𝑃ℎ, ℎ, 𝑡, ℎ= 𝑃𝑋1 = ℎ𝑃𝑋2 = ℎ𝑃𝑋3 = 𝑡𝑃𝑋4 = ℎ=
+1
+2
+1
+2
+1
+2
+1
+2
+= 1
+16
+𝑃𝑋1 = ℎ𝑃𝑋2 = ℎ𝑃𝑋3 = 𝑡𝑃𝑋4 = ℎ=
+1
+2
+1
+2
+1
+2
+1
+2
+= 1
+16
+
+
+Traffic
+R
+T
++r
+1/4
+-r
+3/4
++r
++t
+3/4
+-t
+1/4
+-r
++t
+1/2
+-t
+1/2
++r
++t
+3/16
++r
+-t
+1/16
+-r
++t
+6/16
+-r
+-t
+6/16
+𝑃+𝑟, −𝑡= 𝑃−𝑡+𝑟𝑃+𝑟=
+1
+4
+1
+4
+= 1
+16
+𝑃−𝑡+𝑟𝑃+𝑟=
+1
+4
+1
+4
+= 1
+16
+
+
+Alarm
+𝑃+𝑏, −𝑒, +𝑎, −𝑗, +𝑚 
+= 𝑃+𝑏𝑃−𝑒𝑃+𝑎+𝑏, −𝑒𝑃−𝑗+𝑎𝑃+𝑚+𝑎 
+B
+A
+E
+M
+J
+B
+P(B)
++b
+0.001
+-b
+0.999
+A
+J
+P(J|A)
++a
++j
+0.9
++a
+-j
+0.1
+-a
++j
+0.05
+-a
+-j
+0.95
+A
+M
+P(M|A)
++a
++m
+0.7
++a
+-m
+0.3
+-a
++m
+0.01
+-a
+-m
+0.99
+B
+E
+A
+P(A|B,E)
++b
++e
++a
+0.95
++b
++e
+-a
+0.05
++b
+-e
++a
+0.94
++b
+-e
+-a
+0.06
+-b
++e
++a
+0.29
+-b
++e
+-a
+0.71
+-b
+-e
++a
+0.001
+-b
+-e
+-a
+0.999
+E
+P(E)
++e
+0.002
+-e
+0.998
+
+
+Alarm
+𝑃+𝑏, −𝑒, +𝑎, −𝑗, +𝑚 
+= 𝑃+𝑏𝑃−𝑒𝑃+𝑎+𝑏, −𝑒𝑃−𝑗+𝑎𝑃+𝑚+𝑎 
+= 0.001 × 0.998 × 0.94 × 0.1 × 0.7 
+B
+A
+E
+M
+J
+B
+P(B)
++b
+0.001
+-b
+0.999
+A
+J
+P(J|A)
++a
++j
+0.9
++a
+-j
+0.1
+-a
++j
+0.05
+-a
+-j
+0.95
+A
+M
+P(M|A)
++a
++m
+0.7
++a
+-m
+0.3
+-a
++m
+0.01
+-a
+-m
+0.99
+B
+E
+A
+P(A|B,E)
++b
++e
++a
+0.95
++b
++e
+-a
+0.05
++b
+-e
++a
+0.94
++b
+-e
+-a
+0.06
+-b
++e
++a
+0.29
+-b
++e
+-a
+0.71
+-b
+-e
++a
+0.001
+-b
+-e
+-a
+0.999
+E
+P(E)
++e
+0.002
+-e
+0.998
+
+
+Alarm
+𝑃+𝑏, −𝑒, +𝑎, −𝑗, +𝑚 
+= 𝑃+𝑏𝑃−𝑒𝑃+𝑎+𝑏, −𝑒𝑃−𝑗+𝑎𝑃+𝑚+𝑎 
+= 0.001 × 0.998 × 0.94 × 0.1 × 0.7 
+B
+A
+E
+M
+J
+B
+P(B)
++b
+0.001
+-b
+0.999
+A
+J
+P(J|A)
++a
++j
+0.9
++a
+-j
+0.1
+-a
++j
+0.05
+-a
+-j
+0.95
+A
+M
+P(M|A)
++a
++m
+0.7
++a
+-m
+0.3
+-a
++m
+0.01
+-a
+-m
+0.99
+B
+E
+A
+P(A|B,E)
++b
++e
++a
+0.95
++b
++e
+-a
+0.05
++b
+-e
++a
+0.94
++b
+-e
+-a
+0.06
+-b
++e
++a
+0.29
+-b
++e
+-a
+0.71
+-b
+-e
++a
+0.001
+-b
+-e
+-a
+0.999
+E
+P(E)
++e
+0.002
+-e
+0.998
+𝑃+𝑏, −𝑒, −𝑎, −𝑗, +𝑚 
+= 𝑃+𝑏𝑃−𝑒𝑃−𝑎+𝑏, −𝑒𝑃−𝑗−𝑎𝑃+𝑚−𝑎 
+= 0.001 × 0.998 × 0.06 × 0.95 × 0.01 
+
+
+Size of BN
+B
+A
+E
+M
+J
+B
+P(B)
++b
+0.001
+-b
+0.999
+A
+J
+P(J|A)
++a
++j
+0.9
++a
+-j
+0.1
+-a
++j
+0.05
+-a
+-j
+0.95
+A
+M
+P(M|A)
++a
++m
+0.7
++a
+-m
+0.3
+-a
++m
+0.01
+-a
+-m
+0.99
+B
+E
+A
+P(A|B,E)
++b
++e
++a
+0.95
++b
++e
+-a
+0.05
++b
+-e
++a
+0.94
++b
+-e
+-a
+0.06
+-b
++e
++a
+0.29
+-b
++e
+-a
+0.71
+-b
+-e
++a
+0.001
+-b
+-e
+-a
+0.999
+E
+P(E)
++e
+0.002
+-e
+0.998
+How many independent probability values (free 
+parameters) needed for this table?
+
+
+Size of BN
+B
+A
+E
+M
+J
+B
+P(B)
++b
+0.001
+-b
+0.999
+A
+J
+P(J|A)
++a
++j
+0.9
++a
+-j
+0.1
+-a
++j
+0.05
+-a
+-j
+0.95
+A
+M
+P(M|A)
++a
++m
+0.7
++a
+-m
+0.3
+-a
++m
+0.01
+-a
+-m
+0.99
+B
+E
+A
+P(A|B,E)
++b
++e
++a
+0.95
++b
++e
+-a
+0.05
++b
+-e
++a
+0.94
++b
+-e
+-a
+0.06
+-b
++e
++a
+0.29
+-b
++e
+-a
+0.71
+-b
+-e
++a
+0.001
+-b
+-e
+-a
+0.999
+E
+P(E)
++e
+0.002
+-e
+0.998
+How many independent probability values (free 
+parameters) needed for this table?
+
+
+Size of BN
+B
+A
+E
+M
+J
+B
+P(B)
++b
+0.001
+-b
+0.999
+A
+J
+P(J|A)
++a
++j
+0.9
++a
+-j
+0.1
+-a
++j
+0.05
+-a
+-j
+0.95
+A
+M
+P(M|A)
++a
++m
+0.7
++a
+-m
+0.3
+-a
++m
+0.01
+-a
+-m
+0.99
+B
+E
+A
+P(A|B,E)
++b
++e
++a
+0.95
++b
++e
+-a
+0.05
++b
+-e
++a
+0.94
++b
+-e
+-a
+0.06
+-b
++e
++a
+0.29
+-b
++e
+-a
+0.71
+-b
+-e
++a
+0.001
+-b
+-e
+-a
+0.999
+E
+P(E)
++e
+𝜃𝑒
+-e
+1−𝜃𝑒
+How many independent probability values (free 
+parameters) needed for this table?
+Only 1! The table must sum up to 1.
+
+
+Size of BN
+B
+A
+E
+M
+J
+B
+P(B)
++b
+0.001
+-b
+0.999
+A
+J
+P(J|A)
++a
++j
+0.9
++a
+-j
+0.1
+-a
++j
+0.05
+-a
+-j
+0.95
+A
+M
+P(M|A)
++a
++m
+0.7
++a
+-m
+0.3
+-a
++m
+0.01
+-a
+-m
+0.99
+B
+E
+A
+P(A|B,E)
++b
++e
++a
+0.95
++b
++e
+-a
+0.05
++b
+-e
++a
+0.94
++b
+-e
+-a
+0.06
+-b
++e
++a
+0.29
+-b
++e
+-a
+0.71
+-b
+-e
++a
+0.001
+-b
+-e
+-a
+0.999
+E
+P(E)
++e
+𝜃𝑒
+-e
+1−𝜃𝑒
+How many independent probability values (free 
+parameters) in this table?
+
+
+Size of BN
+B
+A
+E
+M
+J
+B
+P(B)
++b
+0.001
+-b
+0.999
+A
+J
+P(J|A)
++a
++j
+0.9
++a
+-j
+0.1
+-a
++j
+0.05
+-a
+-j
+0.95
+A
+M
+P(M|A)
++a
++m
+0.7
++a
+-m
+0.3
+-a
++m
+0.01
+-a
+-m
+0.99
+B
+E
+A
+P(A|B,E)
++b
++e
++a
+𝜃𝑎1
++b
++e
+-a
+1−𝜃𝑎1
++b
+-e
++a
+𝜃𝑎2
++b
+-e
+-a
+1−𝜃𝑎2
+-b
++e
++a
+𝜃𝑎3
+-b
++e
+-a
+1−𝜃𝑎3
+-b
+-e
++a
+𝜃𝑎4
+-b
+-e
+-a
+1−𝜃𝑎4
+E
+P(E)
++e
+𝜃𝑒
+-e
+1−𝜃𝑒
+How many independent probability values (free 
+parameters) in this table?
+4 free parameters. 
+For each assignment to the parents, the 
+conditional distribution must sum to 1.
+
+
+Size of BN
+B
+A
+E
+M
+J
+B
+P(B)
++b
+0.001
+-b
+0.999
+A
+J
+P(J|A)
++a
++j
+0.9
++a
+-j
+0.1
+-a
++j
+0.05
+-a
+-j
+0.95
+A
+M
+P(M|A)
++a
++m
+0.7
++a
+-m
+0.3
+-a
++m
+0.01
+-a
+-m
+0.99
+B
+E
+A
+P(A|B,E)
++b
++e
++a
+𝜃𝑎1
++b
++e
+-a
+1−𝜃𝑎1
++b
+-e
++a
+𝜃𝑎2
++b
+-e
+-a
+1−𝜃𝑎2
+-b
++e
++a
+𝜃𝑎3
+-b
++e
+-a
+1−𝜃𝑎3
+-b
+-e
++a
+𝜃𝑎4
+-b
+-e
+-a
+1−𝜃𝑎4
+E
+P(E)
++e
+𝜃𝑒
+-e
+1−𝜃𝑒
+How many independent probability values (free 
+parameters) for this Bayesian network?
+
+
+Size of BN
+B
+A
+E
+M
+J
+B
+P(B)
++b
+𝜃𝑏
+-b
+1−𝜃𝑏
+A
+J
+P(J|A)
++a
++j
+𝜃𝑗1
++a
+-j
+1−𝜃𝑗1
+-a
++j
+𝜃𝑗2
+-a
+-j
+1−𝜃𝑗2
+A
+M
+P(M|A)
++a
++m
+𝜃𝑚1
++a
+-m
+1−𝜃𝑚1
+-a
++m
+𝜃𝑚2
+-a
+-m
+1−𝜃𝑚2
+B
+E
+A
+P(A|B,E)
++b
++e
++a
+𝜃𝑎1
++b
++e
+-a
+1−𝜃𝑎1
++b
+-e
++a
+𝜃𝑎2
++b
+-e
+-a
+1−𝜃𝑎2
+-b
++e
++a
+𝜃𝑎3
+-b
++e
+-a
+1−𝜃𝑎3
+-b
+-e
++a
+𝜃𝑎4
+-b
+-e
+-a
+1−𝜃𝑎4
+E
+P(E)
++e
+𝜃𝑒
+-e
+1−𝜃𝑒
+How many independent probability values (free 
+parameters) for this Bayesian network?
+1 + 1 + 2 + 2 + 4 = 10
+As opposed to 25 −1 = 31 independent 
+parameters for the full joint distribution table
+
+
+Size of BN
+• How big is a joint distribution table over N Boolean variables?
+ 
+ 
+ 
+ 
+      over N variables with d values?
+• How big is a Bayesian network CPT for a Boolean variable that has k parents?
+ 
+ 
+ 
+ 
+            a variable with d values and k parents?
+• How big is a Bayesian network with N Boolean variables that have at most k parents?
+ 
+ 
+ 
+             with N variables with d values and at most k parents?
+• Huge space savings from BNs compared to joint distribution tables!
+• Also easier to elicit local CPTs and faster to answer queries
+𝑂2𝑁
+𝑂𝑑𝑁
+𝑂2𝑘
+𝑂𝑑𝑘(𝑑−1) = 𝑂(𝑑𝑘+1)
+𝑂𝑁⋅2𝑘
+𝑂𝑁⋅𝑑𝑘+1
+BNs achieve compact representation by making (conditional) independence assumptions!
+
+
+Example: Independence in BN
+• Conditional independence assumptions directly from simplifications in chain rule:
+• Chain rule (always true): 𝑃𝑋, 𝑌, 𝑍, 𝑊= 𝑃𝑋𝑃𝑌𝑋𝑃𝑍𝑋, 𝑌𝑃(𝑊|𝑋, 𝑌, 𝑍)
+• BN structure implies: 𝑃𝑋, 𝑌, 𝑍, 𝑊= 𝑃𝑋𝑃𝑌𝑋𝑃𝑍𝑌𝑃(𝑊|𝑍)
+• 𝑃𝑍𝑋, 𝑌= 𝑃(𝑍|𝑌)
+• 𝑃𝑊𝑋, 𝑌, 𝑍= 𝑃(𝑊|𝑍) 
+X
+Y
+Z
+W
+𝑍⊥𝑋 | 𝑌
+𝑊⊥𝑋, 𝑌 | 𝑍
+
+
+Independence in BN structure
+• Parents(V) = {N: there is an edge N -> V}
+• Descendants(V) = {N: there is a directed path from V to N}
+• Non-descendants(V): variables other than V, Parents(V), Descendants(V)
+• Markovian assumption: Every node V is conditionally independent of Non-descendants(V) given 
+Parents(V)
+B
+A
+E
+M
+J
+Parents(B) = {}
+Non-descendants(B) = {E}
+Burglary is independent of Earthquake: B ⊥ E
+Parents(J) = {A}
+Non-descendants(J) = {B, E, M}
+J ⊥ B,E,M | A
+
+
+Independence in BN structure
+• Markov blanket: parents, children, and children’s parents 
+• Each node is conditionally independent of all other nodes given its Markov blanket
+B
+A
+E
+M
+J
+Markov-blanket(J)={A}
+J ⊥ B,E,M | A
+
+
+Independence in BN structure
+• Markov blanket: parents, children, and children’s parents 
+• Each node is conditionally independent of all other nodes given its Markov blanket
+𝑋5
+Markov-blanket(X5) = {X3,X4,X6,X7,X8}
+X5 ⊥ X1,X2,X6 | X3,X4
+𝑋8
+𝑋7
+𝑋3
+𝑋4
+𝑋1
+𝑋6
+𝑋2
+Parents(X5) = {X3,X4}
+Non-descendants(X5) = {X1,X2,X6}
+X5 ⊥ X1,X2| X3,X4,X6,X7,X8
+How do we in general prove or disprove whether two nodes are 
+independent given certain evidence?
+
+
+D-separation
+• We can study the (conditional) independence properties assumed by a BN graph structure
+• Complex cases can be analyzed using three configurations over triples of nodes:
+X
+Y
+Z
+“Causal chains”
+X
+Y
+Z
+“Common cause”
+X
+Y
+Z
+“Common effect”
+
+
+Causal chains
+• Is X independent of Z?
+• No! Suffices to show one counterexample set of CPTs for which X is not independent of Z
+• E.g., low pressure causes rain causes traffic & high pressure causes no rain causes no traffic
+• Is X independent of Z given Y?
+𝑃𝑧𝑥, 𝑦= 𝑃𝑥, 𝑦, 𝑧
+𝑃𝑥, 𝑦
+= 𝑃𝑥𝑃𝑦𝑥𝑃(𝑧|𝑦)
+𝑃𝑥𝑃(𝑦|𝑥)
+= 𝑃(𝑧|𝑦)
+X
+Y
+Z
+Low pressure
+Rain
+Traffic
+Yes! 
+Evidence along the chain “blocks” the influence
+
+
+Common cause
+• Is X independent of Z?
+• No! Suffices to show one counterexample set of CPTs for which X is not independent of Z
+• E.g., homework due causes both forums and office hours to be busy
+• Is X independent of Z given Y?
+𝑃𝑧𝑥, 𝑦= 𝑃𝑥, 𝑦, 𝑧
+𝑃𝑥, 𝑦
+= 𝑃𝑥|𝑦𝑃(𝑦)𝑃(𝑧|𝑦)
+𝑃𝑥|𝑦𝑃(𝑦)
+= 𝑃(𝑧|𝑦)
+Forums 
+busy
+HW 
+due
+OH 
+busy
+Yes! 
+Observing the cause blocks influence between effects
+X
+Y
+Z
+
+
+Common effect
+• Is X independent of Z?
+• Yes! The ballgame and the rain causes traffic, but they are not correlated
+• Exercise: prove that they must be independent
+• Is X independent of Z given Y?
+• No! Seeing traffic puts the rain and the ballgame in competition as explanation
+Rain
+Traffic
+Ballgame
+Observing an effect activates influence between possible causes
+(this is backwards from the other two cases)
+X
+Y
+Z
+
+
+D-separation (textbook algorithm)
+• In a given BN structure, are variables X and Y independent given 
+evidence variables {Z}? 
+• Recipe: analyze the graph for active paths
+1.
+Shade evidence nodes
+2.
+Consider all undirected paths from X to Y
+3.
+Independence if no active paths (i.e., X and Y are “d-separated” by Z). 
+A path is active if all triples in it are active.
+• A path is active if each triple is active:
+• Causal chain (X→Y→Z) and common cause (X←Y→Z): if Y is unobserved
+• Common effect (X→Y←Z): if Y or one of its descendants is observed
+Active Triples
+Inactive Triples
+
+
+D-separation: graphical test
+• In a given BN structure, are variables X and Y independent given evidence variables {Z}? 
+• i.e., Are X and Y d-separated by {Z}?
+• Graphical test:
+1. Delete any leaf node W from the DAG as long as W is not in X, Y, or {Z}
+2. Repeat Step 1 until no more nodes can be deleted
+3. Delete all edges outgoing from nodes in {Z}
+4. X and Y are d-separated (independent) given Z iff they are disconnected in the 
+resulting DAG
+
+
+Example
+R
+T
+B
+D
+L
+T’
+Not d-separated
+1.
+Delete leaf nodes not in X, Y, or {Z}
+2.
+Repeat Step 1 until no more can be deleted
+3.
+Delete all outgoing edges from {Z}
+4.
+𝑋⊥𝑌 | 𝑍 if X and Y are disconnected in the resulting DAG
+𝐿⊥𝐵 | 𝑇 ?
+
+
+Example
+R
+T
+B
+D
+L
+T’
+L and B are d-
+separated given 
+T, R
+1.
+Delete leaf nodes not in X, Y, or {Z}
+2.
+Repeat Step 1 until no more can be deleted
+3.
+Delete all outgoing edges from {Z}
+4.
+𝑋⊥𝑌 | 𝑍 if X and Y are disconnected in the resulting DAG
+𝐿⊥𝐵 | 𝑇, 𝑅 ?
+
+
+Topology limits distributions
+• Given some graph topology G, only certain 
+joint distributions can be encoded – only those 
+that satisfy (conditional) independences 
+guaranteed by the graph.
+• Adding edges increases the set of possible 
+distributions: any independence not assumed by 
+graph can be enforced by parameters.
+• However, adding edges increases the number 
+of parameters and inference complexity
+X
+Y
+Z
+X
+Y
+Z
+X
+Y
+Z
+X
+Y
+Z
+X
+Y
+Z
+X
+Y
+Z
+X
+Y
+Z
+X
+Y
+Z
+X
+Y
+Z
+X
+Y
+Z
+Most restrictive: 
+fully factorized 
+(independent)
+Most expressive: 
+fully connected
+
+
+Summary
+• Bayesian networks defined by structure (graph) and parameters (CPTs)
+• Bayesian networks compactly represent joint distributions
+• BN graph structure (topology) guarantees certain independencies of distributions
+• D-separation gives precise conditional independence guarantees from graph alone
+• BN joint distribution may still have further (conditional) independences that is not detectable 
+until you inspect its specific distribution (including CPTs)
+• Next: probabilistic inference algorithms on BNs
+• Reading: R&N Ch.13
+
+
