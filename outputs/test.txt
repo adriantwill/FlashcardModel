@@ -1,1376 +1,619 @@
-CSE 471
-Introduction to Artificial Intelligence
-YooJung Choi
-Spring 2025
+HEART and LUNGS
+OMFS 571 Clinical Anatomy
+Karisa Yamamoto, DDS
 
 
-Probabilistic graphical models (PGMs)
-• Two problems with using full joint distribution tables as our probabilistic models:
-• Other than very simple cases, the joint distribution table is too big to represent explicitly
-• Hard to learn (estimate) anything empirically about more than a few variables at a time
-• PGMs use a graphical structure to more concisely represent distributions
-• Bayesian networks: directed PGM exploiting (conditional) independence
-• Describe complex joint distributions using simple, local distributions (conditional probabilities)
-• Local interactions chain together to give global, indirect interactions
+California Northstate University College of Dental Medicine
+Heart: Learning Outcomes
+• Describe the blood flow physiology of the heart and the anatomical 
+structures involved
+• Describe the structures of the heart that are significant in 
+embryonic development
+• Describe the electrophysiology of the heart
+• Describe the coronary circulation
+• Describe the clinical anatomical correlations of valvular heart 
+disease, infective endocarditis, cardiac referred pain and 
+myocardial infarction
 
 
-BN application: medical diagnosis
-A Bayesian Network Model for Diagnosis of Liver Disorders – Agnieszka Onisko, M.S., Marek J. Druzdzel, Ph.D., and Hanna Wasyluk, 
-M.D.,Ph.D.- September 1999.
+California Northstate University College of Dental Medicine
+ANATOMY OF 
+THE HEART
 
 
-BN application: insurance
-
-
-Bayesian network structure
-• Nodes: variables (with domains)
-• Can be observed or unobserved
-• Arcs: interactions between variables
-• Indicate “direct influence” between variables
-• Formally: encode conditional independence (more later)
-• Intuition: it helps to think of arrows as direct causation (though in general, they don’t)
-
-
-Coin flips
-• N independent coin flips
-• No interaction between variables: absolute independence
-X1
-X2
-Xn
-
-
-Traffic
-• Variables: 
-• Why is an agent using model 2 better?
-• Model 1: independence
-• Model 2: rain causes traffic
-R
-T
-R
-T
-R: it rains
-T: there is traffic
-
-
-Alarm network
-• Variables: 
-• A burglar or an earthquake may set the alarm off
-• The alarm can cause neighbor John or Mary to call
-B: Burglary
-A: Alarm goes off
-M: Mary calls
-J: John calls
-E: Earthquake
-B
-A
-E
-M
-J
-
-
-Bayesian network semantics
-• A set of nodes, one per variable 
-• A directed acyclic graph
-• A conditional distribution for each node
-• P( X | parents(X))
-• CPT: conditional probability table
-• Description of a noisy “causal” process
-• BN = graph (topology) + local conditional probabilities
-A1
-X
-An
-
-
-Probabilities in BNs
-• Bayesian networks implicitly encode joint distributions As a product of local conditional distributions
-𝑃𝑥1, … , 𝑥𝑛= ෑ
-𝑖=1
-𝑛
-𝑃𝑥𝑖𝑝𝑎𝑟𝑒𝑛𝑡𝑠𝑋𝑖)
-• Check: Are we guaranteed that this results in a valid joint distribution?
-• Chain rule (valid for all distributions): Repeated application of product rule
-• 𝑃𝑥1, 𝑥2, … , 𝑥𝑛= 𝑃𝑥𝑛𝑥1, … , 𝑥𝑛−1 𝑃𝑥1, … , 𝑥𝑛−1
-• Note: this implies conditional independences: 𝑃𝑥𝑖𝑥1, … , 𝑥𝑖−1) = 𝑃𝑥𝑖𝑝𝑎𝑟𝑒𝑛𝑡𝑠𝑋𝑖)    (more on this later)
-= 𝑃𝑥𝑛𝑥1, … , 𝑥𝑛−1 𝑃𝑥𝑛−1 𝑥1, … , 𝑥𝑛−2 𝑃𝑥1, … , 𝑥𝑛−2
-= ⋯= ෑ
-𝑖=1
-𝑛
-𝑃𝑥𝑖𝑥1, … , 𝑥𝑖−1)
-
-
-Coin flips
-Only distributions whose variables are absolutely 
-independent can be represented by a BN with no arcs.
-h
-0.5
-t
-0.5
-h
-0.5
-t
-0.5
-h
-0.5
-t
-0.5
-X1
-X2
-Xn
-𝑃ℎ, ℎ, 𝑡, ℎ= 𝑃𝑋1 = ℎ𝑃𝑋2 = ℎ𝑃𝑋3 = 𝑡𝑃𝑋4 = ℎ=
-1
-2
-1
-2
-1
-2
-1
-2
-= 1
-16
-𝑃𝑋1 = ℎ𝑃𝑋2 = ℎ𝑃𝑋3 = 𝑡𝑃𝑋4 = ℎ=
-1
-2
-1
-2
-1
-2
-1
-2
-= 1
-16
-
-
-Traffic
-R
-T
-+r
-1/4
--r
-3/4
-+r
-+t
-3/4
--t
-1/4
--r
-+t
-1/2
--t
-1/2
-+r
-+t
-3/16
-+r
--t
-1/16
--r
-+t
-6/16
--r
--t
-6/16
-𝑃+𝑟, −𝑡= 𝑃−𝑡+𝑟𝑃+𝑟=
-1
+California Northstate University College of Dental Medicine
+The Heart
+7/18/202
+5
 4
-1
-4
-= 1
-16
-𝑃−𝑡+𝑟𝑃+𝑟=
-1
-4
-1
-4
-= 1
-16
 
 
-Alarm
-𝑃+𝑏, −𝑒, +𝑎, −𝑗, +𝑚 
-= 𝑃+𝑏𝑃−𝑒𝑃+𝑎+𝑏, −𝑒𝑃−𝑗+𝑎𝑃+𝑚+𝑎 
-B
-A
-E
-M
-J
-B
-P(B)
-+b
-0.001
--b
-0.999
-A
-J
-P(J|A)
-+a
-+j
-0.9
-+a
--j
-0.1
--a
-+j
-0.05
--a
--j
-0.95
-A
-M
-P(M|A)
-+a
-+m
-0.7
-+a
--m
-0.3
--a
-+m
-0.01
--a
--m
-0.99
-B
-E
-A
-P(A|B,E)
-+b
-+e
-+a
-0.95
-+b
-+e
--a
-0.05
-+b
--e
-+a
-0.94
-+b
--e
--a
-0.06
--b
-+e
-+a
-0.29
--b
-+e
--a
-0.71
--b
--e
-+a
-0.001
--b
--e
--a
-0.999
-E
-P(E)
-+e
-0.002
--e
-0.998
+California Northstate University College of Dental Medicine
+Layers of the Heart
+7/18/202
+5
+5
 
 
-Alarm
-𝑃+𝑏, −𝑒, +𝑎, −𝑗, +𝑚 
-= 𝑃+𝑏𝑃−𝑒𝑃+𝑎+𝑏, −𝑒𝑃−𝑗+𝑎𝑃+𝑚+𝑎 
-= 0.001 × 0.998 × 0.94 × 0.1 × 0.7 
-B
-A
-E
-M
-J
-B
-P(B)
-+b
-0.001
--b
-0.999
-A
-J
-P(J|A)
-+a
-+j
-0.9
-+a
--j
-0.1
--a
-+j
-0.05
--a
--j
-0.95
-A
-M
-P(M|A)
-+a
-+m
-0.7
-+a
--m
-0.3
--a
-+m
-0.01
--a
--m
-0.99
-B
-E
-A
-P(A|B,E)
-+b
-+e
-+a
-0.95
-+b
-+e
--a
-0.05
-+b
--e
-+a
-0.94
-+b
--e
--a
-0.06
--b
-+e
-+a
-0.29
--b
-+e
--a
-0.71
--b
--e
-+a
-0.001
--b
--e
--a
-0.999
-E
-P(E)
-+e
-0.002
--e
-0.998
+California Northstate University College of Dental Medicine
+Flow of Blood Through Heart
 
 
-Alarm
-𝑃+𝑏, −𝑒, +𝑎, −𝑗, +𝑚 
-= 𝑃+𝑏𝑃−𝑒𝑃+𝑎+𝑏, −𝑒𝑃−𝑗+𝑎𝑃+𝑚+𝑎 
-= 0.001 × 0.998 × 0.94 × 0.1 × 0.7 
-B
-A
-E
-M
-J
-B
-P(B)
-+b
-0.001
--b
-0.999
-A
-J
-P(J|A)
-+a
-+j
-0.9
-+a
--j
-0.1
--a
-+j
-0.05
--a
--j
-0.95
-A
-M
-P(M|A)
-+a
-+m
-0.7
-+a
--m
-0.3
--a
-+m
-0.01
--a
--m
-0.99
-B
-E
-A
-P(A|B,E)
-+b
-+e
-+a
-0.95
-+b
-+e
--a
-0.05
-+b
--e
-+a
-0.94
-+b
--e
--a
-0.06
--b
-+e
-+a
-0.29
--b
-+e
--a
-0.71
--b
--e
-+a
-0.001
--b
--e
--a
-0.999
-E
-P(E)
-+e
-0.002
--e
-0.998
-𝑃+𝑏, −𝑒, −𝑎, −𝑗, +𝑚 
-= 𝑃+𝑏𝑃−𝑒𝑃−𝑎+𝑏, −𝑒𝑃−𝑗−𝑎𝑃+𝑚−𝑎 
-= 0.001 × 0.998 × 0.06 × 0.95 × 0.01 
+California Northstate University College of Dental Medicine
+Borders of the Heart
 
 
-Size of BN
-B
-A
-E
-M
-J
-B
-P(B)
-+b
-0.001
--b
-0.999
-A
-J
-P(J|A)
-+a
-+j
-0.9
-+a
--j
-0.1
--a
-+j
-0.05
--a
--j
-0.95
-A
-M
-P(M|A)
-+a
-+m
-0.7
-+a
--m
-0.3
--a
-+m
-0.01
--a
--m
-0.99
-B
-E
-A
-P(A|B,E)
-+b
-+e
-+a
-0.95
-+b
-+e
--a
-0.05
-+b
--e
-+a
-0.94
-+b
--e
--a
-0.06
--b
-+e
-+a
-0.29
--b
-+e
--a
-0.71
--b
--e
-+a
-0.001
--b
--e
--a
-0.999
-E
-P(E)
-+e
-0.002
--e
-0.998
-How many independent probability values (free 
-parameters) needed for this table?
+California Northstate University College of Dental Medicine
+Chest X-Ray: Borders of Heart
 
 
-Size of BN
-B
-A
-E
-M
-J
-B
-P(B)
-+b
-0.001
--b
-0.999
-A
-J
-P(J|A)
-+a
-+j
-0.9
-+a
--j
-0.1
--a
-+j
-0.05
--a
--j
-0.95
-A
-M
-P(M|A)
-+a
-+m
-0.7
-+a
--m
-0.3
--a
-+m
-0.01
--a
--m
-0.99
-B
-E
-A
-P(A|B,E)
-+b
-+e
-+a
-0.95
-+b
-+e
--a
-0.05
-+b
--e
-+a
-0.94
-+b
--e
--a
-0.06
--b
-+e
-+a
-0.29
--b
-+e
--a
-0.71
--b
--e
-+a
-0.001
--b
--e
--a
-0.999
-E
-P(E)
-+e
-0.002
--e
-0.998
-How many independent probability values (free 
-parameters) needed for this table?
+California Northstate University College of Dental Medicine
+Surface Anatomy of Heart: Anterior View
+7/18/202
+5
+9
 
 
-Size of BN
-B
-A
-E
-M
-J
-B
-P(B)
-+b
-0.001
--b
-0.999
-A
-J
-P(J|A)
-+a
-+j
-0.9
-+a
--j
-0.1
--a
-+j
-0.05
--a
--j
-0.95
-A
-M
-P(M|A)
-+a
-+m
-0.7
-+a
--m
-0.3
--a
-+m
-0.01
--a
--m
-0.99
-B
-E
-A
-P(A|B,E)
-+b
-+e
-+a
-0.95
-+b
-+e
--a
-0.05
-+b
--e
-+a
-0.94
-+b
--e
--a
-0.06
--b
-+e
-+a
-0.29
--b
-+e
--a
-0.71
--b
--e
-+a
-0.001
--b
--e
--a
-0.999
-E
-P(E)
-+e
-𝜃𝑒
--e
-1−𝜃𝑒
-How many independent probability values (free 
-parameters) needed for this table?
-Only 1! The table must sum up to 1.
+California Northstate University College of Dental Medicine
+Great Vessels of the Heart
 
 
-Size of BN
-B
-A
-E
-M
-J
-B
-P(B)
-+b
-0.001
--b
-0.999
-A
-J
-P(J|A)
-+a
-+j
-0.9
-+a
--j
-0.1
--a
-+j
-0.05
--a
--j
-0.95
-A
-M
-P(M|A)
-+a
-+m
-0.7
-+a
--m
-0.3
--a
-+m
-0.01
--a
--m
-0.99
-B
-E
-A
-P(A|B,E)
-+b
-+e
-+a
-0.95
-+b
-+e
--a
-0.05
-+b
--e
-+a
-0.94
-+b
--e
--a
-0.06
--b
-+e
-+a
-0.29
--b
-+e
--a
-0.71
--b
--e
-+a
-0.001
--b
--e
--a
-0.999
-E
-P(E)
-+e
-𝜃𝑒
--e
-1−𝜃𝑒
-How many independent probability values (free 
-parameters) in this table?
+California Northstate University College of Dental Medicine
+Surface Anatomy of Heart: Posterior View
+Posterior interventricular sulcus
 
 
-Size of BN
-B
-A
-E
-M
-J
-B
-P(B)
-+b
-0.001
--b
-0.999
-A
-J
-P(J|A)
-+a
-+j
-0.9
-+a
--j
-0.1
--a
-+j
-0.05
--a
--j
-0.95
-A
-M
-P(M|A)
-+a
-+m
-0.7
-+a
--m
-0.3
--a
-+m
-0.01
--a
--m
-0.99
-B
-E
-A
-P(A|B,E)
-+b
-+e
-+a
-𝜃𝑎1
-+b
-+e
--a
-1−𝜃𝑎1
-+b
--e
-+a
-𝜃𝑎2
-+b
--e
--a
-1−𝜃𝑎2
--b
-+e
-+a
-𝜃𝑎3
--b
-+e
--a
-1−𝜃𝑎3
--b
--e
-+a
-𝜃𝑎4
--b
--e
--a
-1−𝜃𝑎4
-E
-P(E)
-+e
-𝜃𝑒
--e
-1−𝜃𝑒
-How many independent probability values (free 
-parameters) in this table?
-4 free parameters. 
-For each assignment to the parents, the 
-conditional distribution must sum to 1.
+California Northstate University College of Dental Medicine
+Pulmonary Vessels
+Posterior interventricular sulcus
 
 
-Size of BN
-B
-A
-E
-M
-J
-B
-P(B)
-+b
-0.001
--b
-0.999
-A
-J
-P(J|A)
-+a
-+j
-0.9
-+a
--j
-0.1
--a
-+j
-0.05
--a
--j
-0.95
-A
-M
-P(M|A)
-+a
-+m
-0.7
-+a
--m
-0.3
--a
-+m
-0.01
--a
--m
-0.99
-B
-E
-A
-P(A|B,E)
-+b
-+e
-+a
-𝜃𝑎1
-+b
-+e
--a
-1−𝜃𝑎1
-+b
--e
-+a
-𝜃𝑎2
-+b
--e
--a
-1−𝜃𝑎2
--b
-+e
-+a
-𝜃𝑎3
--b
-+e
--a
-1−𝜃𝑎3
--b
--e
-+a
-𝜃𝑎4
--b
--e
--a
-1−𝜃𝑎4
-E
-P(E)
-+e
-𝜃𝑒
--e
-1−𝜃𝑒
-How many independent probability values (free 
-parameters) for this Bayesian network?
+California Northstate University College of Dental Medicine
+Internal View of Right Atrium
 
 
-Size of BN
-B
-A
-E
-M
-J
-B
-P(B)
-+b
-𝜃𝑏
--b
-1−𝜃𝑏
-A
-J
-P(J|A)
-+a
-+j
-𝜃𝑗1
-+a
--j
-1−𝜃𝑗1
--a
-+j
-𝜃𝑗2
--a
--j
-1−𝜃𝑗2
-A
-M
-P(M|A)
-+a
-+m
-𝜃𝑚1
-+a
--m
-1−𝜃𝑚1
--a
-+m
-𝜃𝑚2
--a
--m
-1−𝜃𝑚2
-B
-E
-A
-P(A|B,E)
-+b
-+e
-+a
-𝜃𝑎1
-+b
-+e
--a
-1−𝜃𝑎1
-+b
--e
-+a
-𝜃𝑎2
-+b
--e
--a
-1−𝜃𝑎2
--b
-+e
-+a
-𝜃𝑎3
--b
-+e
--a
-1−𝜃𝑎3
--b
--e
-+a
-𝜃𝑎4
--b
--e
--a
-1−𝜃𝑎4
-E
-P(E)
-+e
-𝜃𝑒
--e
-1−𝜃𝑒
-How many independent probability values (free 
-parameters) for this Bayesian network?
-1 + 1 + 2 + 2 + 4 = 10
-As opposed to 25 −1 = 31 independent 
-parameters for the full joint distribution table
+California Northstate University College of Dental Medicine
+Prenatal Circulation
+7/18/202
+5
+14
 
 
-Size of BN
-• How big is a joint distribution table over N Boolean variables?
- 
- 
- 
- 
-      over N variables with d values?
-• How big is a Bayesian network CPT for a Boolean variable that has k parents?
- 
- 
- 
- 
-            a variable with d values and k parents?
-• How big is a Bayesian network with N Boolean variables that have at most k parents?
- 
- 
- 
-             with N variables with d values and at most k parents?
-• Huge space savings from BNs compared to joint distribution tables!
-• Also easier to elicit local CPTs and faster to answer queries
-𝑂2𝑁
-𝑂𝑑𝑁
-𝑂2𝑘
-𝑂𝑑𝑘(𝑑−1) = 𝑂(𝑑𝑘+1)
-𝑂𝑁⋅2𝑘
-𝑂𝑁⋅𝑑𝑘+1
-BNs achieve compact representation by making (conditional) independence assumptions!
+California Northstate University College of Dental Medicine
+Internal View of the Right Ventricle
+Trabeculae carnae
+(aka Moderator band)
 
 
-Example: Independence in BN
-• Conditional independence assumptions directly from simplifications in chain rule:
-• Chain rule (always true): 𝑃𝑋, 𝑌, 𝑍, 𝑊= 𝑃𝑋𝑃𝑌𝑋𝑃𝑍𝑋, 𝑌𝑃(𝑊|𝑋, 𝑌, 𝑍)
-• BN structure implies: 𝑃𝑋, 𝑌, 𝑍, 𝑊= 𝑃𝑋𝑃𝑌𝑋𝑃𝑍𝑌𝑃(𝑊|𝑍)
-• 𝑃𝑍𝑋, 𝑌= 𝑃(𝑍|𝑌)
-• 𝑃𝑊𝑋, 𝑌, 𝑍= 𝑃(𝑊|𝑍) 
-X
-Y
-Z
-W
-𝑍⊥𝑋 | 𝑌
-𝑊⊥𝑋, 𝑌 | 𝑍
+California Northstate University College of Dental Medicine
+Ventricle Dissection
 
 
-Independence in BN structure
-• Parents(V) = {N: there is an edge N -> V}
-• Descendants(V) = {N: there is a directed path from V to N}
-• Non-descendants(V): variables other than V, Parents(V), Descendants(V)
-• Markovian assumption: Every node V is conditionally independent of Non-descendants(V) given 
-Parents(V)
-B
-A
-E
-M
-J
-Parents(B) = {}
-Non-descendants(B) = {E}
-Burglary is independent of Earthquake: B ⊥ E
-Parents(J) = {A}
-Non-descendants(J) = {B, E, M}
-J ⊥ B,E,M | A
+California Northstate University College of Dental Medicine
+Internal View of Left Atrium and Ventricle
+7/18/202
+5
+17
 
 
-Independence in BN structure
-• Markov blanket: parents, children, and children’s parents 
-• Each node is conditionally independent of all other nodes given its Markov blanket
-B
-A
-E
-M
-J
-Markov-blanket(J)={A}
-J ⊥ B,E,M | A
+California Northstate University College of Dental Medicine
+Internal View of Left Ventricle
+7/18/202
+5
+18
 
 
-Independence in BN structure
-• Markov blanket: parents, children, and children’s parents 
-• Each node is conditionally independent of all other nodes given its Markov blanket
-𝑋5
-Markov-blanket(X5) = {X3,X4,X6,X7,X8}
-X5 ⊥ X1,X2,X6 | X3,X4
-𝑋8
-𝑋7
-𝑋3
-𝑋4
-𝑋1
-𝑋6
-𝑋2
-Parents(X5) = {X3,X4}
-Non-descendants(X5) = {X1,X2,X6}
-X5 ⊥ X1,X2| X3,X4,X6,X7,X8
-How do we in general prove or disprove whether two nodes are 
-independent given certain evidence?
+California Northstate University College of Dental Medicine
+Semilunar Valves
 
 
-D-separation
-• We can study the (conditional) independence properties assumed by a BN graph structure
-• Complex cases can be analyzed using three configurations over triples of nodes:
-X
-Y
-Z
-“Causal chains”
-X
-Y
-Z
-“Common cause”
-X
-Y
-Z
-“Common effect”
+California Northstate University College of Dental Medicine
+Semilunar Valves
 
 
-Causal chains
-• Is X independent of Z?
-• No! Suffices to show one counterexample set of CPTs for which X is not independent of Z
-• E.g., low pressure causes rain causes traffic & high pressure causes no rain causes no traffic
-• Is X independent of Z given Y?
-𝑃𝑧𝑥, 𝑦= 𝑃𝑥, 𝑦, 𝑧
-𝑃𝑥, 𝑦
-= 𝑃𝑥𝑃𝑦𝑥𝑃(𝑧|𝑦)
-𝑃𝑥𝑃(𝑦|𝑥)
-= 𝑃(𝑧|𝑦)
-X
-Y
-Z
-Low pressure
-Rain
-Traffic
-Yes! 
-Evidence along the chain “blocks” the influence
+California Northstate University College of Dental Medicine
+Origin of the Coronary Arteries
 
 
-Common cause
-• Is X independent of Z?
-• No! Suffices to show one counterexample set of CPTs for which X is not independent of Z
-• E.g., homework due causes both forums and office hours to be busy
-• Is X independent of Z given Y?
-𝑃𝑧𝑥, 𝑦= 𝑃𝑥, 𝑦, 𝑧
-𝑃𝑥, 𝑦
-= 𝑃𝑥|𝑦𝑃(𝑦)𝑃(𝑧|𝑦)
-𝑃𝑥|𝑦𝑃(𝑦)
-= 𝑃(𝑧|𝑦)
-Forums 
-busy
-HW 
-due
-OH 
-busy
-Yes! 
-Observing the cause blocks influence between effects
-X
-Y
-Z
+California Northstate University College of Dental Medicine
+Clinical Application:
+Valvular Heart Disease
+• Stenosis – narrowing and failure of a valve 
+to open fully, slowing blood flow from a 
+chamber
+• Insufficiency (aka regurgitation or 
+incompetence) - failure of the valve to 
+close, allowing blood to flow back into the 
+chamber it was ejected from
+• Murmurs – audible vibrations caused by the 
+turbulent blood flow of  valvular stenosis or 
+insufficiency
+• Damaged or defective heart valves can be 
+replaced surgically with prosthetic valves
+7/18/202
+5
+22
 
 
-Common effect
-• Is X independent of Z?
-• Yes! The ballgame and the rain causes traffic, but they are not correlated
-• Exercise: prove that they must be independent
-• Is X independent of Z given Y?
-• No! Seeing traffic puts the rain and the ballgame in competition as explanation
-Rain
-Traffic
-Ballgame
-Observing an effect activates influence between possible causes
-(this is backwards from the other two cases)
-X
-Y
-Z
+California Northstate University College of Dental Medicine
+Clinical Application: 
+Infective Endocarditis
+• Infection caused by bacteria that enter the 
+bloodstream and settle in the endocardium 
+(inner lining of the heart), heart valves or blood 
+vessels
+• Tissue that experiences turbulent blood flow 
+most at risk (valves), mitral and aortic valve 
+most commonly affected
+• Can be caused by poor oral hygiene, 
+toothbrushing causing minor injury in the 
+mouth, dental procedures
+• Symptoms: fever, heart murmur, 
+tachycardia, cough, aching joints/muscles
+7/18/202
+5
+23
 
 
-D-separation (textbook algorithm)
-• In a given BN structure, are variables X and Y independent given 
-evidence variables {Z}? 
-• Recipe: analyze the graph for active paths
-1.
-Shade evidence nodes
-2.
-Consider all undirected paths from X to Y
-3.
-Independence if no active paths (i.e., X and Y are “d-separated” by Z). 
-A path is active if all triples in it are active.
-• A path is active if each triple is active:
-• Causal chain (X→Y→Z) and common cause (X←Y→Z): if Y is unobserved
-• Common effect (X→Y←Z): if Y or one of its descendants is observed
-Active Triples
-Inactive Triples
+California Northstate University College of Dental Medicine
+Clinical Application: 
+Cardiac Patients and Antibiotic Prophylaxis
+•
+prosthetic cardiac valves, including transcatheter-implanted prostheses and homografts;
+•
+prosthetic material used for cardiac valve repair, such as annuloplasty rings and chords;
+•
+a history of infective endocarditis;
+•
+a cardiac transplant with valve regurgitation due to a structurally abnormal valve;
+•
+the following congenital (present from birth) heart disease:
+–
+unrepaired cyanotic congenital heart disease, including palliative shunts and conduits
+–
+any repaired congenital heart defect with residual shunts or valvular regurgitation at the site of or adjacent to the site of a 
+prosthetic patch or a prosthetic device
+7/18/202
+5
+24
+The current infective endocarditis/valvular heart disease guidelines state that use of 
+preventive antibiotics before certain dental procedures is reasonable for patients with:
 
 
-D-separation: graphical test
-• In a given BN structure, are variables X and Y independent given evidence variables {Z}? 
-• i.e., Are X and Y d-separated by {Z}?
-• Graphical test:
-1. Delete any leaf node W from the DAG as long as W is not in X, Y, or {Z}
-2. Repeat Step 1 until no more nodes can be deleted
-3. Delete all edges outgoing from nodes in {Z}
-4. X and Y are d-separated (independent) given Z iff they are disconnected in the 
-resulting DAG
+California Northstate University College of Dental Medicine
+Conducting System of the Heart
 
 
-Example
-R
-T
-B
-D
-L
-T’
-Not d-separated
-1.
-Delete leaf nodes not in X, Y, or {Z}
-2.
-Repeat Step 1 until no more can be deleted
-3.
-Delete all outgoing edges from {Z}
-4.
-𝑋⊥𝑌 | 𝑍 if X and Y are disconnected in the resulting DAG
-𝐿⊥𝐵 | 𝑇 ?
+California Northstate University College of Dental Medicine
+Innervation of the Heart
 
 
-Example
-R
-T
-B
-D
-L
-T’
-L and B are d-
-separated given 
-T, R
-1.
-Delete leaf nodes not in X, Y, or {Z}
-2.
-Repeat Step 1 until no more can be deleted
-3.
-Delete all outgoing edges from {Z}
-4.
-𝑋⊥𝑌 | 𝑍 if X and Y are disconnected in the resulting DAG
-𝐿⊥𝐵 | 𝑇, 𝑅 ?
+California Northstate University College of Dental Medicine
+Sympathetic Innervation of Heart
 
 
-Topology limits distributions
-• Given some graph topology G, only certain 
-joint distributions can be encoded – only those 
-that satisfy (conditional) independences 
-guaranteed by the graph.
-• Adding edges increases the set of possible 
-distributions: any independence not assumed by 
-graph can be enforced by parameters.
-• However, adding edges increases the number 
-of parameters and inference complexity
-X
-Y
-Z
-X
-Y
-Z
-X
-Y
-Z
-X
-Y
-Z
-X
-Y
-Z
-X
-Y
-Z
-X
-Y
-Z
-X
-Y
-Z
-X
-Y
-Z
-X
-Y
-Z
-Most restrictive: 
-fully factorized 
-(independent)
-Most expressive: 
-fully connected
+California Northstate University College of Dental Medicine
+Parasympathetic Innervation of Heart
 
 
-Summary
-• Bayesian networks defined by structure (graph) and parameters (CPTs)
-• Bayesian networks compactly represent joint distributions
-• BN graph structure (topology) guarantees certain independencies of distributions
-• D-separation gives precise conditional independence guarantees from graph alone
-• BN joint distribution may still have further (conditional) independences that is not detectable 
-until you inspect its specific distribution (including CPTs)
-• Next: probabilistic inference algorithms on BNs
-• Reading: R&N Ch.13
+California Northstate University College of Dental Medicine
+Clinical Application:
+Cardiac Referred Pain
+7/18/202
+5
+29
+•
+Ischemia (lack of oxygen) as in angina 
+pectoris or a myocardial infarction can 
+stimulate pain fibers in the heart
+•
+Pain fibers run centrally in middle and 
+inferior cervical branches and especially 
+in the thoracic cardiac branches of the 
+sympathetic trunk
+•
+Axons enter spinal cord segments T1 
+through T4/5 especially on the left side
+•
+Presents as referred pain to the 
+superficial somatic area supplied by the 
+spinal nerves involved
+•
+Most commonly the left shoulder, arm 
+and chest
+
+
+California Northstate University College of Dental Medicine
+ANATOMY OF
+THE CORONARY 
+CIRCULATION
+
+
+California Northstate University College of Dental Medicine
+Right Coronary Artery: Anterior View
+
+
+California Northstate University College of Dental Medicine
+Right Coronary Artery: Posterior View
+
+
+California Northstate University College of Dental Medicine
+Left Coronary Artery: Anterior View
+
+
+California Northstate University College of Dental Medicine
+Left Coronary Artery: Posterior View
+
+
+California Northstate University College of Dental Medicine
+Areas Supplied by Coronary Arteries
+
+
+California Northstate University College of Dental Medicine
+Anatomical Variation
+
+
+California Northstate University College of Dental Medicine
+Anatomical Variation
+
+
+California Northstate University College of Dental Medicine
+Collateral Circulation
+
+
+California Northstate University College of Dental Medicine
+Coronary Venous Drainage
+
+
+California Northstate University College of Dental Medicine
+Coronary Venous Drainage
+
+
+California Northstate University College of Dental Medicine
+Coronary Venous Drainage
+
+
+California Northstate University College of Dental Medicine
+Clinical Application: 
+Myocardial Infarction
+• Sudden occlusion of coronary 
+artery leads to lack of blood supply 
+and oxygen to region of myocardium, 
+leading to necrosis (tissue death)
+• Three most common sites from 
+greatest to least:
+1)
+Anterior Interventricular Branch 
+of Left Coronary Artery (LAD)
+2)
+Right Coronary Artery
+3)
+Circumflex Branch of Left 
+Coronary Artery
+7/18/202
+5
+42
+
+
+California Northstate University College of Dental Medicine
+
+
+California Northstate University College of Dental Medicine
+Breathing Into Stress
+
+
+California Northstate University College of Dental Medicine
+Lungs: Learning Outcomes
+• Describe the parts of the pleura, pleural lines of reflection, and recesses
+• Identify the surfaces and borders of the lungs
+• Describe the differences in structure and surface features of the right and left 
+lungs
+• Identify the impressions and the positions of various organs and vessels on the 
+lungs
+• Identify and describe the branching of the tracheobronchial tree
+• Describe the pulmonary functional and nutritive circulation
+• Describe the general innervation and lymphatic drainage of the lungs and pleura
+• Discuss the clinical application of the anatomy in a pneumothorax, lung 
+cancer, foreign body aspiration, pulmonary embolism and referred pain
+
+
+California Northstate University College of Dental Medicine
+ANATOMY OF THE 
+PLEURA
+
+
+California Northstate University College of Dental Medicine
+The Pleura
+
+
+California Northstate University College of Dental Medicine
+Pulmonary Hilum
+
+
+California Northstate University College of Dental Medicine
+4 Parts of Parietal Pleura
+
+
+California Northstate University College of Dental Medicine
+Cervical Pleura and Pleural Cupula
+Vulnerable to injury
+
+
+California Northstate University College of Dental Medicine
+Lines of Pleural Reflection
+
+
+California Northstate University College of Dental Medicine
+Sternal Lines of Reflection
+
+
+California Northstate University College of Dental Medicine
+Costal Lines of Reflection
+
+
+California Northstate University College of Dental Medicine
+Vertebral Lines of Reflection
+
+
+California Northstate University College of Dental Medicine
+
+
+California Northstate University College of Dental Medicine
+Clinical Application: Pneumothorax
+• Air introduced into pleural cavity
+• Lung collapses due to loss of negative 
+pressure in the pleural cavity
+• Injury: gunshot or knife wound, fractured 
+rib, air blisters of the lung break open as in 
+scuba diving or travel to high altitude
+• Leads to pneumothorax
+• Symptoms: shortness of breath, painful 
+respiration
+• Hemothorax – blood in pleural cavity
+• Hydrothorax – excess fluid in pleural cavity
+
+
+California Northstate University College of Dental Medicine
+ANATOMY OF THE 
+LUNGS AND 
+TRACHEOBRONCHIAL 
+TREE
+
+
+California Northstate University College of Dental Medicine
+
+
+California Northstate University College of Dental Medicine
+Surfaces of the Lung
+
+
+California Northstate University College of Dental Medicine
+Right vs. Left Lungs
+
+
+California Northstate University College of Dental Medicine
+Impressions on the Lung
+
+
+California Northstate University College of Dental Medicine
+Roots of the Lungs
+
+
+California Northstate University College of Dental Medicine
+Right vs. Left Root of Lung
+
+
+California Northstate University College of Dental Medicine
+R A L S
+• Right Anterior – on the 
+right lung the pulmonary 
+artery is anterior to the 
+bronchus
+• Left Superior – on the left 
+lung the pulmonary artery 
+is superior to the bronchus
+
+
+California Northstate University College of Dental Medicine
+Hilum of the Lung
+
+
+California Northstate University College of Dental Medicine
+Embalmed Right Lung – Medial View
+
+
+California Northstate University College of Dental Medicine
+Embalmed Left Lung – Medial View
+7/18/202
+5
+67
+
+
+California Northstate University College of Dental Medicine
+Primary (Main) Bronchi
+
+
+California Northstate University College of Dental Medicine
+Clinical Application: 
+Foreign Body Aspiration
+7/18/202
+5
+69
+• Right main bronchus is wider, 
+shorter and runs more vertically 
+than the left main bronchus
+• Right main bronchus more often 
+the site of aspiration
+• Common in dental procedures
+• Moral of the Story: Use a rubber 
+dam!
+
+
+California Northstate University College of Dental Medicine
+Secondary Lobar Bronchi
+
+
+California Northstate University College of Dental Medicine
+Tertiary Segmental Bronchi
+Clinical Application: 
+Bronchopulmonary segments 
+are functionally distinct, 
+which is important for 
+surgeons who resect the 
+lungs, as in the treatment of 
+lung cancer.
+If tumors or abscesses are 
+located in a single segment, 
+they can be surgically 
+removed (segmentectomy).
+Lobectomy – entire lobe 
+removed
+Pneumonectomy – entire 
+lung removed
+
+
+California Northstate University College of Dental Medicine
+Conducting Bronchioles, Terminal Bronchioles, 
+Respiratory Bronchioles, Alveoli
+
+
+California Northstate University College of Dental Medicine
+Branching of Tracheobronchial Tree
+7/18/202
+5
+73
+
+
+California Northstate University College of Dental Medicine
+Functional vs. Nutritive Circulation
+
+
+California Northstate University College of Dental Medicine
+Functional Circulation
+
+
+California Northstate University College of Dental Medicine
+Pulmonary Arteries Pair with Bronchi
+
+
+California Northstate University College of Dental Medicine
+Clinical Application: 
+Pulmonary Embolism
+7/18/202
+5
+77
+•
+Blockage of pulmonary artery
+•
+Acute respiratory distress
+•
+Right heart dilation and failure
+
+
+California Northstate University College of Dental Medicine
+Pulmonary Veins Follow Their Own Path
+
+
+California Northstate University College of Dental Medicine
+Nutritive Circulation: Arterial Supply
+
+
+California Northstate University College of Dental Medicine
+Nutritive Circulation: Venous Drainage
+
+
+California Northstate University College of Dental Medicine
+Lymphatic Drainage of Lungs
+7/18/202
+5
+81
+Deep
+
+
+California Northstate University College of Dental Medicine
+•
+Primary cause: cigarette smoking
+•
+Most common primary site: mucosa of primary bronchi
+•
+Lymphogenous metastasis to bronchopulmonary lymph nodes 
+and to other thoracic lymph nodes
+•
+Hematogenous metastasis via blood stream commonly to the 
+brain, bones, lungs and suprarenal glands
+•
+Detection: supraclavicular lymph node enlargement; 
+persistent, productive cough with blood (hemoptysis); cancer 
+cells in sputum (saliva)
+•
+Tumors can grow and cause injury to other mediastinal 
+structures:
+–
+Phrenic nerve injury – paralysis of one half of diaphragm
+–
+Recurrent laryngeal nerve injury – hoarseness, aphonia
+–
+Superior vena cava – venous congestion, headaches, dizziness, redness, 
+edema
+7/18/202
+5
+82
+Clinical Application: 
+Lung Cancer
+Mass in right superior lobe
+
+
+California Northstate University College of Dental Medicine
+Pulmonary Plexus
+
+
+California Northstate University College of Dental Medicine
+Parasympathetic Innervation
+
+
+California Northstate University College of Dental Medicine
+Sympathetic Innervation
+
+
+California Northstate University College of Dental Medicine
+Visceral Afferent Fibers
+
+
+California Northstate University College of Dental Medicine
+Innervation to Parietal Pleura
+Clinical Application: Irritation of the 
+parietal pleura can also cause referred 
+pain to the dermatomes of the spinal 
+nerves from which the phrenic nerve 
+originates (C3-5)
+
+
+California Northstate University College of Dental Medicine
+Reading: Moore's Clinically Oriented Anatomy
+CHAPTER 4
+• Pages 332-354
+• Pages 362-390
+7/18/202
+5
+88
+
+
+California Northstate University College of Dental Medicine
+Sources
+• American Dental Association
+• American Heart Association
+• Dalley, Arthur F.; Agur, Anne M.R. Moore's Clinically Oriented Anatomy. 
+Philadelphia, PA: Wolters Kluwer, 2023.
+• Ellis, Harold; Mahadeva, Vishy. Clinical Anatomy: Applied Anatomy for 
+Students and Junior Doctors. Hoboken, NJ: John Wiley & Sons Ltd, 2019.
+• Kaplan
+• Netter, Frank H. Atlas of Human Anatomy. Philadelphia, PA: Elsevier, 2019.
+• Osmosis.org
+
+
+California Northstate University College of Dental Medicine
+THANK YOU!
+Questions, comments or feedback?
+Email karisa.yamamoto@cnsu.edu
 
 
