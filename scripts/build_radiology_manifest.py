@@ -3,13 +3,15 @@ import json
 from pathlib import Path
 
 rad_uploads = {}
-with open("data/uploads_rows.csv", "r") as f:
+path = Path("data/uploads_rows.csv")
+with path.open("r", newline="", encoding="utf-8") as f:
     reader = csv.DictReader(f)
     for row in reader:
         if row["folder_id"] == "e44a470c-217b-441c-90b8-90096b41e02d":
             rad_uploads[row["id"]] = row["storage_path"]
 rad_questions = []
-with open("data/questions_rows.csv", "r", newline="", encoding="utf-8") as f:
+path = Path("data/questions_rows.csv")
+with path.open("r", newline="", encoding="utf-8") as f:
     reader = csv.DictReader(f)  # radiology is e44a470c-217b-441c-90b8-90096b41e02d
     for row in reader:
         if row["upload_id"] in rad_uploads and row["page_number"]:
@@ -24,7 +26,7 @@ with open("data/questions_rows.csv", "r", newline="", encoding="utf-8") as f:
                     "pdf_path": str(pdf_path),
                     "question": row["question_text"],
                     "answer": row["answer_text"],
-                    "page_number": row["page_number"],
+                    "page_number": int(row["page_number"]),
                 }
             )
 with open("data/radiology_manifest.jsonl", "w") as f:
