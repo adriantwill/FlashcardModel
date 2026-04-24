@@ -17,7 +17,6 @@ with path.open("r", newline="", encoding="utf-8") as f:
         if row["upload_id"] in rad_uploads and row["page_number"]:
             pdf_path = Path(f"data/pdfs/{rad_uploads[row['upload_id']]}")
             if not pdf_path.is_file():
-                pdf_path = ""
                 continue
             rad_questions.append(
                 {

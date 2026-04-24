@@ -65,6 +65,27 @@ That is better engineering, better ML, better resume story.
 
 This is strong raw material for supervised fine-tuning and eval.
 
+## Current Status
+
+Completed so far:
+
+- radiology manifest builder created: [build_radiology_manifest.py](/Users/adrianwill/Dev/convert/scripts/build_radiology_manifest.py:1)
+- radiology manifest generated: [radiology_manifest.jsonl](/Users/adrianwill/Dev/convert/data/radiology_manifest.jsonl:1)
+- radiology slide renderer created: [render_radiology_images.py](/Users/adrianwill/Dev/convert/scripts/render_radiology_images.py:1)
+- referenced slide images generated in [slide_images](/Users/adrianwill/Dev/convert/data/slide_images)
+
+Current focus should remain:
+
+- gold dataset quality
+- eval split
+- baseline measurement
+
+Not yet:
+
+- fine-tuning
+- deployment
+- product integration of custom model
+
 ## Best Project Scope
 
 Train **one narrow, useful model** first:
