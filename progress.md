@@ -1,5 +1,62 @@
 # Progress Log
 
+## 2026-05-15
+
+Done:
+
+- researched Math Academy's Mathematics for Machine Learning course as a project-adjacent learning decision
+- compared course value against current applied AI project path: gold dataset cleanup, held-out split, baseline eval, then fine-tuning only after evidence exists
+- created a standalone tangent-vector study aid at [tangent_vector_explainer.html](/Users/adrianwill/Dev/convert/tangent_vector_explainer.html:1)
+
+Current Project State:
+
+- dataset/eval state unchanged from 2026-05-01
+- current project bottleneck remains weak flashcard cleanup and baseline eval, not broad ML math preparation
+- tangent-vector study aid is independent of the applied AI project pipeline
+
+Suggested Next Steps:
+
+- treat Math Academy as background skill-building rather than a gate before project work
+- continue with review of `edit` and `reject` radiology manifest rows
+
+## 2026-05-01
+
+Done:
+
+- created concise Codex `swe-mentor` skill at `/Users/adrianwill/.codex/skills/swe-mentor`
+- skill captures teach-first SWE mentorship: small steps, no large code drops by default, guided problem solving, resume-grade engineering judgment, and applied AI eval discipline
+- added `.venv/` to `.gitignore`
+- created project `.venv` and installed `PyYAML` there only so the skill validator could run
+- validated the new skill with `quick_validate.py`
+
+Current Project State:
+
+- dataset/eval state unchanged from 2026-04-24
+- current project path remains: clean weak flashcards, export gold dataset, split by upload, then run baseline eval
+
+Suggested Next Steps:
+
+- use `$swe-mentor` when asking for learning-oriented SWE help, interview-grade reasoning, or guided project decisions
+- continue with review of `edit` and `reject` radiology manifest rows
+
+## 2026-04-27
+
+Done:
+
+- created Codex `teacher` skill at `/Users/adrianwill/.codex/skills/teacher`
+- skill captures project mentorship rules: teach first, avoid silent large-code scaffolds, prefer pseudocode/reviews/evals, and focus on applied AI engineer growth across ML/SWE fundamentals
+- added `agents/openai.yaml` metadata for the skill
+
+Current Project State:
+
+- dataset/eval state unchanged from 2026-04-24
+- current project path remains: clean weak flashcards, export gold dataset, split by upload, then run baseline eval
+
+Suggested Next Steps:
+
+- use `$teacher` when asking for learning-oriented help before implementation
+- continue with review of `edit` and `reject` radiology manifest rows
+
 ## 2026-04-24
 
 Done:
