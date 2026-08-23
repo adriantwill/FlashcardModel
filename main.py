@@ -8,8 +8,60 @@ from transformers import (
     Qwen3VLForConditionalGeneration,
 )
 
-def collate_fn(batch: list[Tensor, str]):
 
+def collate_fn(batch: list[tuple[Tensor, str]]):
+    messages = []
+    model_generated = []
+    for tup in batch:
+        (img, ques) = tup
+        message = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "image": img,
+                    },
+                    {
+                        "type": "text",
+                        "text": "Analyze this educational slide and generate 2-3 flashcard-style questions targeting key facts, definitions, and terms a student would need to memorize for an exam.",
+                    },
+                ],
+            },
+        ]
+        model_generated.append(message.copy())
+        message.append(
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": ques,
+                    },
+                ],
+            },
+        )
+        messages.append(message)
+    inputs = processor.apply_chat_template(
+        messages, tokenize=True, return_dict=True, return_tensors="pt", padding=True
+    )
+    outputs = processor.apply_chat_template(
+        model_generated,
+        tokenize=True,
+        return_dict=True,
+        return_tensors="pt",
+        padding=True,
+        add_generation_prompt=True,
+    )
+    inputs["labels"] = inputs["input_ids"].clone()
+    for i in range(len(outputs["input_ids"])):
+        for j in range(len(outputs["input_ids"][i])):
+            if outputs["attention_mask"][i][j] == 1:
+                inputs["labels"][i][j] = -100
+        for j in range(len(inputs["input_ids"][i]) - 1, -1, -1):
+            if inputs["attention_mask"][i][j] == 0:
+                inputs["labels"][i][j] = -100
+    return inputs
 
 
 class CustomDataset(Dataset):
@@ -40,7 +92,7 @@ quantization_config = BitsAndBytesConfig(
 )
 dataset = CustomDataset()
 
-dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+dataloader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=collate_fn)
 model = Qwen3VLForConditionalGeneration.from_pretrained(
     "Qwen/Qwen3-VL-8B-Instruct",
     quantization_config=quantization_config,
