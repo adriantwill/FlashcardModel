@@ -1,17 +1,14 @@
 import pandas as pd
+import torch
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from torchvision.io import decode_image
-from transformers import (
-    AutoProcessor,
-    BitsAndBytesConfig,
-    Qwen3VLForConditionalGeneration,
-)
+from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 
 
 def collate_fn(batch: list[tuple[Tensor, str]]):
-    messages = []
-    model_generated = []
+    inputs_and_outputs = []
+    inputs = []
     for tup in batch:
         (img, ques) = tup
         message = [
@@ -29,7 +26,7 @@ def collate_fn(batch: list[tuple[Tensor, str]]):
                 ],
             },
         ]
-        model_generated.append(message.copy())
+        inputs.append(message.copy())
         message.append(
             {
                 "role": "assistant",
@@ -41,27 +38,32 @@ def collate_fn(batch: list[tuple[Tensor, str]]):
                 ],
             },
         )
-        messages.append(message)
-    inputs = processor.apply_chat_template(
-        messages, tokenize=True, return_dict=True, return_tensors="pt", padding=True
+        inputs_and_outputs.append(message)
+    inputs_outputs_tokenize = processor.apply_chat_template(
+        inputs_and_outputs,
+        tokenize=True,
+        return_dict=True,
+        return_tensors="pt",
+        padding=True,
     )
-    outputs = processor.apply_chat_template(
-        model_generated,
+    inputs_tokensize = processor.apply_chat_template(
+        inputs,
         tokenize=True,
         return_dict=True,
         return_tensors="pt",
         padding=True,
         add_generation_prompt=True,
     )
-    inputs["labels"] = inputs["input_ids"].clone()
-    for i in range(len(outputs["input_ids"])):
-        for j in range(len(outputs["input_ids"][i])):
-            if outputs["attention_mask"][i][j] == 1:
-                inputs["labels"][i][j] = -100
-        for j in range(len(inputs["input_ids"][i]) - 1, -1, -1):
-            if inputs["attention_mask"][i][j] == 0:
-                inputs["labels"][i][j] = -100
-    return inputs
+    inputs_outputs_tokenize["labels"] = inputs_outputs_tokenize["input_ids"].clone()
+    for i in range(len(inputs_tokensize["input_ids"])):
+        for j in range(len(inputs_tokensize["input_ids"][i])):
+            if inputs_tokensize["attention_mask"][i][j] == 1:
+                inputs_outputs_tokenize["labels"][i][j] = -100
+        for j in range(len(inputs_outputs_tokenize["input_ids"][i]) - 1, -1, -1):
+            if inputs_outputs_tokenize["attention_mask"][i][j] == 0:
+                inputs_outputs_tokenize["labels"][i][j] = -100
+    print(inputs_outputs_tokenize["labels"])
+    return inputs_outputs_tokenize
 
 
 class CustomDataset(Dataset):
@@ -87,14 +89,29 @@ class CustomDataset(Dataset):
         return img, label
 
 
-quantization_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-)
+processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-2B-Instruct")
+# quantization_config = BitsAndBytesConfig(
+#     load_in_4bit=True,
+# )
 dataset = CustomDataset()
-
-dataloader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=collate_fn)
+dataloader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
+it = iter(dataloader)
+first = next(it)
 model = Qwen3VLForConditionalGeneration.from_pretrained(
-    "Qwen/Qwen3-VL-8B-Instruct",
-    quantization_config=quantization_config,
+    "Qwen/Qwen3-VL-2B-Instruct",
+    # quantization_config=quantization_config,
 )
-processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-8B-Instruct")
+model = model.to("mps")
+first = first.to("mps")
+model.train()
+optimizer = torch.optim.AdamW(
+    (parameter for parameter in model.parameters() if parameter.requires_grad),
+    lr=1e-5,
+)
+for i in range(20):
+    optimizer.zero_grad()
+    outputs = model(**first)  # forward pass
+    loss = outputs.loss
+    loss.backward()
+    optimizer.step()
+    print(f"Step {i}, Loss {loss.item()}")

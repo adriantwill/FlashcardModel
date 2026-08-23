@@ -1,0 +1,29 @@
+[project]
+name = "flashcard-generator"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "adriantwill", email = "142526523+adriantwill@users.noreply.github.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "accelerate>=1.10.1",
+    "bitsandbytes>=0.50.1",
+    "pandas>=2.3.3",
+    "torch>=2.8.0",
+    "torchvision>=0.23.0",
+    "transformers>=4.57.6",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
+
+[project.scripts]
+flashcard-generator = "flashcard_generator:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
