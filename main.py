@@ -99,19 +99,29 @@ it = iter(dataloader)
 first = next(it)
 model = Qwen3VLForConditionalGeneration.from_pretrained(
     "Qwen/Qwen3-VL-2B-Instruct",
+    dtype=torch.float16,
     # quantization_config=quantization_config,
 )
+for parameter in model.parameters():
+    parameter.requires_grad = False
+
+# Unfreeze only final text transformer block.
+for parameter in model.model.language_model.layers[-1].parameters():
+    parameter.requires_grad = True
+
 model = model.to("mps")
 first = first.to("mps")
 model.train()
 optimizer = torch.optim.AdamW(
     (parameter for parameter in model.parameters() if parameter.requires_grad),
     lr=1e-5,
+    eps=1e-4,
 )
-for i in range(20):
+for i in range(10):
     optimizer.zero_grad()
     outputs = model(**first)  # forward pass
     loss = outputs.loss
     loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
     optimizer.step()
     print(f"Step {i}, Loss {loss.item()}")
