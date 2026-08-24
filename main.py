@@ -125,3 +125,37 @@ for i in range(10):
     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
     optimizer.step()
     print(f"Step {i}, Loss {loss.item()}")
+model.eval()
+image, expected = dataset[0]
+message = (
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "image",
+                "image": image,
+            },
+            {
+                "type": "text",
+                "text": "Analyze this educational slide and generate 2-3 flashcard-style questions targeting key facts, definitions, and terms a student would need to memorize for an exam.",
+            },
+        ],
+    },
+)
+inputs_test = processor.apply_chat_template(
+    message,
+    tokenize=True,
+    return_dict=True,
+    return_tensors="pt",
+    padding=True,
+    add_generation_prompt=True,
+)
+inputs_test = inputs_test.to("mps")
+generated_ids = model.generate(**inputs_test, max_new_tokens=128)
+prompt_length = inputs_test["input_ids"].shape[1]
+response_ids = generated_ids[:, prompt_length:]
+output_text = processor.batch_decode(
+    response_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+)
+print(f"generated: {output_text}")
+print(f"expcted: {expected}")
