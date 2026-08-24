@@ -21,7 +21,35 @@ def collate_fn(batch: list[tuple[Tensor, str]]):
                     },
                     {
                         "type": "text",
-                        "text": "Analyze this educational slide and generate 2-3 flashcard-style questions targeting key facts, definitions, and terms a student would need to memorize for an exam.",
+                        "text": """Analyze this educational slide and generate 2-3 flashcard-style questions targeting key facts, definitions, and terms a student would need to memorize for an exam.
+Focus on:
+- Definitions and terminology
+- Key facts, dates, or formulas
+- Lists or steps to memorize
+
+Question rules:
+- Ask only direct, positive questions about content visible on the slide
+- No filler framing: avoid "according to the slide", "in the context of...", "based on...", etc.
+- Do not ask about absent content or exclusions: no "NOT", "except", "not mentioned", or "not a symptom/example"
+- Avoid questions unrelated to the actual slide content, like names of institutions 
+
+For each question, generate exactly 3 wrong but plausible options based on the slide.
+Rules for options:
+- Must be incorrect
+- Do not paraphrase or restate the correct answer
+- Do not use "all/none of the above"
+- Keep length similar to correct answer
+- Avoid copying long phrases verbatim from the slide
+- Skip the slide if it has no testable content
+
+Return JSON array only:
+[
+  {
+    "question": "Question here",
+    "answer": "Concise answer without repeating the question",
+    "options": ["Wrong but plausible 1", "Wrong but plausible 2", "Wrong but plausible 3"]
+  }
+]""",
                     },
                 ],
             },
@@ -68,7 +96,13 @@ def collate_fn(batch: list[tuple[Tensor, str]]):
 
 class CustomDataset(Dataset):
     def __init__(self, transform=None, target_transform=None):
-        self.dataset = pd.read_csv("data/sql/temp_questions.csv")
+        df = pd.read_csv("data/sql/temp_questions.csv")
+        grouping = df.groupby(as_index=False, by=["storage_path", "page_number"]).agg(
+            question_text=("question_text", list),
+            answer_text=("answer_text", list),
+            options=("options", list),
+        )
+        self.dataset = grouping
         self.img_dir = "data/slide_images"
         self.transform = transform
         self.target_transform = target_transform
@@ -78,10 +112,17 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.dataset.iloc[idx]
-        print(row["storage_path"])
         img = f"data/pdf_images/{row['storage_path']}_{int(row['page_number'])}.png"
         img = decode_image(img)
-        label = row["question_text"]
+        label = []
+        for i in range(len(row["question_text"])):
+            label.append(
+                {
+                    "question": row["question_text"][i],
+                    "answer_text": row["answer_text"][i],
+                    "options": row["options"][i],
+                }
+            )
         if self.transform:
             img = self.transform(img)
         if self.target_transform:
