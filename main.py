@@ -96,7 +96,7 @@ Return JSON array only:
 
 class CustomDataset(Dataset):
     def __init__(self, transform=None, target_transform=None):
-        df = pd.read_csv("data/sql/temp_questions.csv")
+        df = pd.read_csv("data/sql/questions_rows.csv")
         grouping = df.groupby(as_index=False, by=["storage_path", "page_number"]).agg(
             question_text=("question_text", list),
             answer_text=("answer_text", list),
