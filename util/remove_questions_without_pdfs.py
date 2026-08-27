@@ -21,4 +21,4 @@ if __name__ == "__main__":
         uploads.set_index("id")["storage_path"]
     )
     questions["storage_path"] = questions["storage_path"].str.replace(".pdf", "")
-    questions.to_csv("data/sql/temp_questions.csv", index=False)
+    questions.to_csv("data/sql/questions_rows.csv", index=False)

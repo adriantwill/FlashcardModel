@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 import torch
 from torch import Tensor
@@ -97,6 +99,7 @@ Return JSON array only:
 class CustomDataset(Dataset):
     def __init__(self, transform=None, target_transform=None):
         df = pd.read_csv("data/sql/questions_rows.csv")
+        df = df.dropna(subset=["question_text", "answer_text", "options"])
         grouping = df.groupby(as_index=False, by=["storage_path", "page_number"]).agg(
             question_text=("question_text", list),
             answer_text=("answer_text", list),
@@ -119,10 +122,11 @@ class CustomDataset(Dataset):
             label.append(
                 {
                     "question": row["question_text"][i],
-                    "answer_text": row["answer_text"][i],
-                    "options": row["options"][i],
+                    "answer": row["answer_text"][i],
+                    "options": json.loads(row["options"][i]),
                 }
             )
+        label = json.dumps(label)
         if self.transform:
             img = self.transform(img)
         if self.target_transform:
@@ -136,8 +140,6 @@ processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-2B-Instruct")
 # )
 dataset = CustomDataset()
 dataloader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
-it = iter(dataloader)
-first = next(it)
 model = Qwen3VLForConditionalGeneration.from_pretrained(
     "Qwen/Qwen3-VL-2B-Instruct",
     dtype=torch.float16,
@@ -151,21 +153,25 @@ for parameter in model.model.language_model.layers[-1].parameters():
     parameter.requires_grad = True
 
 model = model.to("mps")
-first = first.to("mps")
 model.train()
 optimizer = torch.optim.AdamW(
     (parameter for parameter in model.parameters() if parameter.requires_grad),
     lr=1e-5,
     eps=1e-4,
 )
-for i in range(10):
-    optimizer.zero_grad()
-    outputs = model(**first)  # forward pass
-    loss = outputs.loss
-    loss.backward()
-    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-    optimizer.step()
-    print(f"Step {i}, Loss {loss.item()}")
+for i in range(10):  # epoch
+    it = iter(dataloader)
+    for j in range(8):  # trainign step
+        first = next(it)
+        first = first.to("mps")
+        optimizer.zero_grad(set_to_none=True)
+        outputs = model(**first)  # forward pass
+        loss = outputs.loss
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        print(f"Epoch {i}, Step {j}, Loss {loss.item()}")
+        del first, outputs, loss
 model.eval()
 image, expected = dataset[0]
 message = (
