@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pandas as pd
 import torch
@@ -6,6 +7,8 @@ from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from torchvision.io import decode_image
 from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+
+MODEL_PATH = Path("model.pt")
 
 
 def collate_fn(batch: list[tuple[Tensor, str]]):
@@ -134,44 +137,45 @@ class CustomDataset(Dataset):
         return img, label
 
 
-processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-2B-Instruct")
-# quantization_config = BitsAndBytesConfig(
-#     load_in_4bit=True,
-# )
+model_name = "Qwen/Qwen3-VL-2B-Instruct"
+processor = AutoProcessor.from_pretrained(model_name)
 dataset = CustomDataset()
 dataloader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
-model = Qwen3VLForConditionalGeneration.from_pretrained(
-    "Qwen/Qwen3-VL-2B-Instruct",
-    dtype=torch.float16,
-    # quantization_config=quantization_config,
-)
-for parameter in model.parameters():
-    parameter.requires_grad = False
-
-# Unfreeze only final text transformer block.
-for parameter in model.model.language_model.layers[-1].parameters():
-    parameter.requires_grad = True
-
+if MODEL_PATH:
+    model_name = MODEL_PATH
+model = Qwen3VLForConditionalGeneration.from_pretrained(model_name)
 model = model.to("mps")
-model.train()
-optimizer = torch.optim.AdamW(
-    (parameter for parameter in model.parameters() if parameter.requires_grad),
-    lr=1e-5,
-    eps=1e-4,
-)
-for i in range(10):  # epoch
-    it = iter(dataloader)
-    for j in range(8):  # trainign step
-        first = next(it)
-        first = first.to("mps")
-        optimizer.zero_grad(set_to_none=True)
-        outputs = model(**first)  # forward pass
-        loss = outputs.loss
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
-        print(f"Epoch {i}, Step {j}, Loss {loss.item()}")
-        del first, outputs, loss
+if not MODEL_PATH:
+    print("Training")
+    for parameter in model.parameters():
+        parameter.requires_grad = False
+
+    # Unfreeze only final text transformer block.
+    for parameter in model.model.language_model.layers[-1].parameters():
+        parameter.requires_grad = True
+    model.train()
+    optimizer = torch.optim.AdamW(
+        (parameter for parameter in model.parameters() if parameter.requires_grad),
+        lr=1e-5,
+        eps=1e-4,
+    )
+    for i in range(10):  # epoch
+        it = iter(dataloader)
+        for j in range(8):  # trainign step
+            first = next(it)
+            first = first.to("mps")
+            optimizer.zero_grad(set_to_none=True)
+            outputs = model(**first)  # forward pass
+            loss = outputs.loss
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+            print(f"Epoch {i}, Step {j}, Loss {loss.item()}")
+            del first, outputs, loss
+            torch.mps.empty_cache()
+    model.save_pretrained(MODEL_PATH)
+
+
 model.eval()
 image, expected = dataset[0]
 message = (
