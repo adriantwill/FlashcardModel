@@ -1,32 +1,37 @@
 import json
+from peft import LoraConfig, get_peft_model
+from functools import partial
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import torch
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from torchvision.io import decode_image
-from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+from transformers import (
+    AutoProcessor,
+    BatchFeature,
+    Qwen3VLForConditionalGeneration,
+    Qwen3VLProcessor,
+)
 
 MODEL_PATH = Path("model.pt")
+BASE_MODEL_NAME = "Qwen/Qwen3-VL-2B-Instruct"
 
 
-def collate_fn(batch: list[tuple[Tensor, str]]):
-    inputs_and_outputs = []
-    inputs = []
-    for tup in batch:
-        (img, ques) = tup
-        message = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "image": img,
-                    },
-                    {
-                        "type": "text",
-                        "text": """Analyze this educational slide and generate 2-3 flashcard-style questions targeting key facts, definitions, and terms a student would need to memorize for an exam.
+def input_message(img: Tensor):
+    return [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "image": img,
+                },
+                {
+                    "type": "text",
+                    "text": """Analyze this educational slide and generate 2-3 flashcard-style questions targeting key facts, definitions, and terms a student would need to memorize for an exam.
 Focus on:
 - Definitions and terminology
 - Key facts, dates, or formulas
@@ -55,10 +60,21 @@ Return JSON array only:
     "options": ["Wrong but plausible 1", "Wrong but plausible 2", "Wrong but plausible 3"]
   }
 ]""",
-                    },
-                ],
-            },
-        ]
+                },
+            ],
+        }
+    ]
+
+
+def collate_fn(
+    batch: list[tuple[Tensor, str]],
+    processor: Qwen3VLProcessor,
+) -> BatchFeature:
+    inputs_and_outputs = []
+    inputs = []
+    for tup in batch:
+        (img, ques) = tup
+        message = input_message(img)
         inputs.append(message.copy())
         message.append(
             {
@@ -72,20 +88,26 @@ Return JSON array only:
             },
         )
         inputs_and_outputs.append(message)
-    inputs_outputs_tokenize = processor.apply_chat_template(
-        inputs_and_outputs,
-        tokenize=True,
-        return_dict=True,
-        return_tensors="pt",
-        padding=True,
+    inputs_outputs_tokenize = cast(
+        BatchFeature,
+        processor.apply_chat_template(
+            inputs_and_outputs,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+            padding=True,
+        ),
     )
-    inputs_tokensize = processor.apply_chat_template(
-        inputs,
-        tokenize=True,
-        return_dict=True,
-        return_tensors="pt",
-        padding=True,
-        add_generation_prompt=True,
+    inputs_tokensize = cast(
+        BatchFeature,
+        processor.apply_chat_template(
+            inputs,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+            padding=True,
+            add_generation_prompt=True,
+        ),
     )
     inputs_outputs_tokenize["labels"] = inputs_outputs_tokenize["input_ids"].clone()
     for i in range(len(inputs_tokensize["input_ids"])):
@@ -137,16 +159,18 @@ class CustomDataset(Dataset):
         return img, label
 
 
-model_name = "Qwen/Qwen3-VL-2B-Instruct"
-processor = AutoProcessor.from_pretrained(model_name)
-dataset = CustomDataset()
-dataloader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
-if MODEL_PATH:
-    model_name = MODEL_PATH
-model = Qwen3VLForConditionalGeneration.from_pretrained(model_name)
-model = model.to("mps")
-if not MODEL_PATH:
+def train_model(
+    model: Qwen3VLForConditionalGeneration,
+    processor: Qwen3VLProcessor,
+    dataset: CustomDataset,
+) -> Qwen3VLForConditionalGeneration:
     print("Training")
+    dataloader = DataLoader(
+        dataset,
+        batch_size=1,
+        shuffle=False,
+        collate_fn=partial(collate_fn, processor=processor),
+    )
     for parameter in model.parameters():
         parameter.requires_grad = False
 
@@ -174,39 +198,61 @@ if not MODEL_PATH:
             del first, outputs, loss
             torch.mps.empty_cache()
     model.save_pretrained(MODEL_PATH)
+    return model
 
 
-model.eval()
-image, expected = dataset[0]
-message = (
-    {
-        "role": "user",
-        "content": [
-            {
-                "type": "image",
-                "image": image,
-            },
-            {
-                "type": "text",
-                "text": "Analyze this educational slide and generate 2-3 flashcard-style questions targeting key facts, definitions, and terms a student would need to memorize for an exam.",
-            },
-        ],
-    },
-)
-inputs_test = processor.apply_chat_template(
-    message,
-    tokenize=True,
-    return_dict=True,
-    return_tensors="pt",
-    padding=True,
-    add_generation_prompt=True,
-)
-inputs_test = inputs_test.to("mps")
-generated_ids = model.generate(**inputs_test, max_new_tokens=128)
-prompt_length = inputs_test["input_ids"].shape[1]
-response_ids = generated_ids[:, prompt_length:]
-output_text = processor.batch_decode(
-    response_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
-)
-print(f"generated: {output_text}")
-print(f"expcted: {expected}")
+def inference(
+    model: Qwen3VLForConditionalGeneration,
+    image: Tensor,
+    processor: Qwen3VLProcessor,
+) -> str:
+    model.eval()
+    inputs_test = cast(
+        BatchFeature,
+        processor.apply_chat_template(
+            input_message(image),
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+            padding=True,
+            add_generation_prompt=True,
+        ),
+    )
+    inputs_test = inputs_test.to("mps")
+    generated_ids = model.generate(**inputs_test, max_new_tokens=256)
+    prompt_length = inputs_test["input_ids"].shape[1]
+    response_ids = generated_ids[:, prompt_length:]
+    output_text = processor.batch_decode(
+        response_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+    )
+    return output_text
+
+
+def main():
+    processor = AutoProcessor.from_pretrained(BASE_MODEL_NAME)
+    dataset = CustomDataset()
+    image, expected = dataset[200]
+    model = Qwen3VLForConditionalGeneration.from_pretrained(BASE_MODEL_NAME)
+    model = model.to("mps")
+    output = inference(model, image, processor)
+    for i in range(8):
+        image, expected = dataset[i]
+        print(f"expected: {expected}")
+        for model_name in [, MODEL_PATH]:
+            print(
+                f"{'base' if model_name == BASE_MODEL_NAME else 'finetuned'}: {output}"
+            )
+
+    config = LoraConfig(
+        r=16,
+        lora_alpha=16,
+        target_modules=["query", "value"],
+        lora_dropout=0.1,
+        bias="none",
+        modules_to_save=["classifier"],
+    )
+    model = get_peft_model(model, config)
+    model.print_trainable_parameters()
+
+if __name__ == "__main__":
+    main()

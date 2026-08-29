@@ -9,7 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
-
 .DS_Store
 data/pdf_images
+PROGRESS.md
+AGENTS.md
+model.pt
 
