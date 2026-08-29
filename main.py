@@ -1,11 +1,10 @@
 import json
-from peft import LoraConfig, get_peft_model
 from functools import partial
-from pathlib import Path
 from typing import cast
 
 import pandas as pd
 import torch
+from peft import LoraConfig, PeftMixedModel, PeftModel, TaskType, get_peft_model
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from torchvision.io import decode_image
@@ -16,7 +15,7 @@ from transformers import (
     Qwen3VLProcessor,
 )
 
-MODEL_PATH = Path("model.pt")
+MODEL_PATH = "model.pt"
 BASE_MODEL_NAME = "Qwen/Qwen3-VL-2B-Instruct"
 
 
@@ -117,7 +116,6 @@ def collate_fn(
         for j in range(len(inputs_outputs_tokenize["input_ids"][i]) - 1, -1, -1):
             if inputs_outputs_tokenize["attention_mask"][i][j] == 0:
                 inputs_outputs_tokenize["labels"][i][j] = -100
-    print(inputs_outputs_tokenize["labels"])
     return inputs_outputs_tokenize
 
 
@@ -159,12 +157,47 @@ class CustomDataset(Dataset):
         return img, label
 
 
-def train_model(
+def lora_train(
+    model: PeftModel | PeftMixedModel,
+    processor: Qwen3VLProcessor,
+    dataset: CustomDataset,
+) -> PeftModel | PeftMixedModel:
+    print("Lora train")
+    dataloader = DataLoader(
+        dataset,
+        batch_size=1,
+        shuffle=False,
+        collate_fn=partial(collate_fn, processor=processor),
+    )
+    model.train()
+    optimizer = torch.optim.AdamW(
+        (parameter for parameter in model.parameters() if parameter.requires_grad),
+        lr=1e-5,
+        eps=1e-4,
+    )
+    for i in range(5):  # epoch
+        it = iter(dataloader)
+        first = next(it)
+        first = first.to("mps")
+        optimizer.zero_grad(set_to_none=True)
+        outputs = model(**first)  # forward pass
+        loss = outputs.loss
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        print(f"Step {i}, Loss {loss.item()}")
+        del first, outputs, loss
+        torch.mps.empty_cache()
+    # model.save_pretrained(MODEL_PATH)
+    return model
+
+
+def partial_train_model(
     model: Qwen3VLForConditionalGeneration,
     processor: Qwen3VLProcessor,
     dataset: CustomDataset,
 ) -> Qwen3VLForConditionalGeneration:
-    print("Training")
+    print("Parital full training")
     dataloader = DataLoader(
         dataset,
         batch_size=1,
@@ -202,7 +235,7 @@ def train_model(
 
 
 def inference(
-    model: Qwen3VLForConditionalGeneration,
+    model: PeftModel | PeftMixedModel | Qwen3VLForConditionalGeneration,
     image: Tensor,
     processor: Qwen3VLProcessor,
 ) -> str:
@@ -231,28 +264,29 @@ def inference(
 def main():
     processor = AutoProcessor.from_pretrained(BASE_MODEL_NAME)
     dataset = CustomDataset()
-    image, expected = dataset[200]
-    model = Qwen3VLForConditionalGeneration.from_pretrained(BASE_MODEL_NAME)
+    image, expected = dataset[0]
+    model = Qwen3VLForConditionalGeneration.from_pretrained(
+        BASE_MODEL_NAME, dtype=torch.bfloat16
+    )
     model = model.to("mps")
-    output = inference(model, image, processor)
-    for i in range(8):
-        image, expected = dataset[i]
-        print(f"expected: {expected}")
-        for model_name in [, MODEL_PATH]:
-            print(
-                f"{'base' if model_name == BASE_MODEL_NAME else 'finetuned'}: {output}"
-            )
-
+    # output = inference(model, image, processor)
     config = LoraConfig(
         r=16,
         lora_alpha=16,
-        target_modules=["query", "value"],
-        lora_dropout=0.1,
+        target_modules=["q_proj", "v_proj"],
+        lora_dropout=0.0,
         bias="none",
-        modules_to_save=["classifier"],
+        task_type=TaskType.CAUSAL_LM,
     )
     model = get_peft_model(model, config)
+    model.gradient_checkpointing_enable()
+    model.config.text_config.use_cache = False
     model.print_trainable_parameters()
+    model = lora_train(model, processor, dataset)
+    output_text = inference(model, image, processor)
+    print(f"Expected text: {expected}")
+    print(f"Output text: {output_text}")
+
 
 if __name__ == "__main__":
     main()
