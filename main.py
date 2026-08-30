@@ -15,8 +15,17 @@ from transformers import (
     Qwen3VLProcessor,
 )
 
+REDUCE_SIZE = True
 MODEL_PATH = "model.pt"
 BASE_MODEL_NAME = "Qwen/Qwen3-VL-2B-Instruct"
+ADAPTER_PATH = "lora"
+DEVICE = torch.device(
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps"
+    if torch.backends.mps.is_available()
+    else "cpu"
+)
 
 
 def input_message(img: Tensor):
@@ -158,56 +167,51 @@ class CustomDataset(Dataset):
 
 
 def lora_train(
-    model: PeftModel | PeftMixedModel,
-    processor: Qwen3VLProcessor,
-    dataset: CustomDataset,
+    model: Qwen3VLForConditionalGeneration, dataloader: DataLoader
 ) -> PeftModel | PeftMixedModel:
-    print("Lora train")
-    dataloader = DataLoader(
-        dataset,
-        batch_size=1,
-        shuffle=False,
-        collate_fn=partial(collate_fn, processor=processor),
+    config = LoraConfig(
+        r=16,
+        lora_alpha=16,
+        target_modules=["q_proj", "v_proj"],
+        lora_dropout=0.0,
+        bias="none",
+        task_type=TaskType.CAUSAL_LM,
     )
-    model.train()
+    peft_model = get_peft_model(model, config)
+    if REDUCE_SIZE:
+        peft_model.gradient_checkpointing_enable()  # reducdes size
+        peft_model.config.text_config.use_cache = False  # reduces size
+    peft_model.train()
     optimizer = torch.optim.AdamW(
-        (parameter for parameter in model.parameters() if parameter.requires_grad),
-        lr=1e-5,
+        (parameter for parameter in peft_model.parameters() if parameter.requires_grad),
+        lr=1e-4,
         eps=1e-4,
     )
-    for i in range(5):  # epoch
-        it = iter(dataloader)
-        first = next(it)
-        first = first.to("mps")
-        optimizer.zero_grad(set_to_none=True)
-        outputs = model(**first)  # forward pass
-        loss = outputs.loss
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
-        print(f"Step {i}, Loss {loss.item()}")
-        del first, outputs, loss
-        torch.mps.empty_cache()
-    # model.save_pretrained(MODEL_PATH)
-    return model
+    num_epochs = 2
+    for i in range(num_epochs):
+        for step, batch in enumerate(dataloader):
+            batch = batch.to(DEVICE)
+            optimizer.zero_grad(set_to_none=True)
+            outputs = peft_model(**batch)  # forward pass
+            loss = outputs.loss
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(peft_model.parameters(), max_norm=1.0)
+            optimizer.step()
+            print(f"Step {i}, Loss {loss.item()}")
+            print(f"Epoch: {i}, Step: {step}, Loss: {loss.item()}")
+            if REDUCE_SIZE:
+                del batch, outputs, loss
+                torch.mps.empty_cache()
+    peft_model.save_pretrained(ADAPTER_PATH)
+    return peft_model
 
 
 def partial_train_model(
-    model: Qwen3VLForConditionalGeneration,
-    processor: Qwen3VLProcessor,
-    dataset: CustomDataset,
+    model: Qwen3VLForConditionalGeneration, dataloader: DataLoader
 ) -> Qwen3VLForConditionalGeneration:
     print("Parital full training")
-    dataloader = DataLoader(
-        dataset,
-        batch_size=1,
-        shuffle=False,
-        collate_fn=partial(collate_fn, processor=processor),
-    )
     for parameter in model.parameters():
         parameter.requires_grad = False
-
-    # Unfreeze only final text transformer block.
     for parameter in model.model.language_model.layers[-1].parameters():
         parameter.requires_grad = True
     model.train()
@@ -220,7 +224,7 @@ def partial_train_model(
         it = iter(dataloader)
         for j in range(8):  # trainign step
             first = next(it)
-            first = first.to("mps")
+            first = first.to(DEVICE)
             optimizer.zero_grad(set_to_none=True)
             outputs = model(**first)  # forward pass
             loss = outputs.loss
@@ -228,8 +232,9 @@ def partial_train_model(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             print(f"Epoch {i}, Step {j}, Loss {loss.item()}")
-            del first, outputs, loss
-            torch.mps.empty_cache()
+            if REDUCE_SIZE:
+                del first, outputs, loss
+                torch.mps.empty_cache()
     model.save_pretrained(MODEL_PATH)
     return model
 
@@ -251,10 +256,11 @@ def inference(
             add_generation_prompt=True,
         ),
     )
-    inputs_test = inputs_test.to("mps")
-    generated_ids = model.generate(**inputs_test, max_new_tokens=256)
+    inputs_test = inputs_test.to(DEVICE)
+    generated_ids = model.generate(**inputs_test, max_new_tokens=512)
     prompt_length = inputs_test["input_ids"].shape[1]
     response_ids = generated_ids[:, prompt_length:]
+    print(f"Token count: {response_ids.shape[1]}")
     output_text = processor.batch_decode(
         response_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )
@@ -262,30 +268,26 @@ def inference(
 
 
 def main():
+    load_existing = True
     processor = AutoProcessor.from_pretrained(BASE_MODEL_NAME)
     dataset = CustomDataset()
-    image, expected = dataset[0]
     model = Qwen3VLForConditionalGeneration.from_pretrained(
         BASE_MODEL_NAME, dtype=torch.bfloat16
     )
-    model = model.to("mps")
-    # output = inference(model, image, processor)
-    config = LoraConfig(
-        r=16,
-        lora_alpha=16,
-        target_modules=["q_proj", "v_proj"],
-        lora_dropout=0.0,
-        bias="none",
-        task_type=TaskType.CAUSAL_LM,
+    dataloader = DataLoader(
+        dataset,
+        batch_size=1,
+        shuffle=False,
+        collate_fn=partial(collate_fn, processor=processor),
     )
-    model = get_peft_model(model, config)
-    model.gradient_checkpointing_enable()
-    model.config.text_config.use_cache = False
-    model.print_trainable_parameters()
-    model = lora_train(model, processor, dataset)
-    output_text = inference(model, image, processor)
-    print(f"Expected text: {expected}")
-    print(f"Output text: {output_text}")
+    if load_existing:
+        model = PeftModel.from_pretrained(model, ADAPTER_PATH)
+    else:
+        model = lora_train(model, dataloader)
+    model = model.to(DEVICE)
+    output_text = inference(model, dataset[0][0], processor)
+    print(f"Expected text: {dataset[0][1]}")
+    print(f"Fine tuned text: {output_text}")
 
 
 if __name__ == "__main__":
