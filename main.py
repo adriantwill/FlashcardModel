@@ -15,7 +15,6 @@ from transformers import (
     Qwen3VLProcessor,
 )
 
-REDUCE_SIZE = True
 MODEL_PATH = "model.pt"
 BASE_MODEL_NAME = "Qwen/Qwen3-VL-2B-Instruct"
 ADAPTER_PATH = "lora"
@@ -39,7 +38,7 @@ def input_message(img: Tensor):
                 },
                 {
                     "type": "text",
-                    "text": """Analyze this educational slide and generate 2-3 flashcard-style questions targeting key facts, definitions, and terms a student would need to memorize for an exam.
+                    "text": """Analyze this educational slide and generate 1-3 flashcard-style questions targeting key facts, definitions, and terms a student would need to memorize for an exam.
 Focus on:
 - Definitions and terminology
 - Key facts, dates, or formulas
@@ -49,29 +48,53 @@ Question rules:
 - Ask only direct, positive questions about content visible on the slide
 - No filler framing: avoid "according to the slide", "in the context of...", "based on...", etc.
 - Do not ask about absent content or exclusions: no "NOT", "except", "not mentioned", or "not a symptom/example"
-- Avoid questions unrelated to the actual slide content, like names of institutions 
-
-For each question, generate exactly 3 wrong but plausible options based on the slide.
-Rules for options:
-- Must be incorrect
-- Do not paraphrase or restate the correct answer
-- Do not use "all/none of the above"
-- Keep length similar to correct answer
-- Avoid copying long phrases verbatim from the slide
-- Skip the slide if it has no testable content
+- Avoid questions unrelated to the actual slide content, like names of institutions
+- If no testable content, return empty array with no questions
 
 Return JSON array only:
 [
   {
     "question": "Question here",
-    "answer": "Concise answer without repeating the question",
-    "options": ["Wrong but plausible 1", "Wrong but plausible 2", "Wrong but plausible 3"]
+    "answer": "Concise answer without repeating the question"
   }
 ]""",
                 },
             ],
         }
     ]
+
+
+def partial_train_model(
+    model: Qwen3VLForConditionalGeneration, dataloader: DataLoader
+) -> Qwen3VLForConditionalGeneration:
+    print("Parital full training")
+    for parameter in model.parameters():
+        parameter.requires_grad = False
+    for parameter in model.model.language_model.layers[-1].parameters():
+        parameter.requires_grad = True
+    model.train()
+    optimizer = torch.optim.AdamW(
+        (parameter for parameter in model.parameters() if parameter.requires_grad),
+        lr=1e-5,
+        eps=1e-4,
+    )
+    for i in range(10):  # epoch
+        it = iter(dataloader)
+        for j in range(8):  # trainign step
+            first = next(it)
+            first = first.to(DEVICE)
+            optimizer.zero_grad(set_to_none=True)
+            outputs = model(**first)  # forward pass
+            loss = outputs.loss
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+            print(f"Epoch {i}, Step {j}, Loss {loss.item()}")
+            if DEVICE != "cuda":
+                del first, outputs, loss
+                torch.mps.empty_cache()
+    model.save_pretrained(MODEL_PATH)
+    return model
 
 
 def collate_fn(
@@ -131,12 +154,21 @@ def collate_fn(
 class CustomDataset(Dataset):
     def __init__(self, transform=None, target_transform=None):
         df = pd.read_csv("data/sql/questions_rows.csv")
-        df = df.dropna(subset=["question_text", "answer_text", "options"])
-        grouping = df.groupby(as_index=False, by=["storage_path", "page_number"]).agg(
+        df = df.dropna(subset=["question_text", "answer_text"])
+        group_columns = ["storage_path", "page_number"]
+        df["chunk"] = df.groupby(group_columns, sort=False).cumcount() // 3
+        grouping = df.groupby(
+            group_columns + ["chunk"],
+            as_index=False,
+            sort=False,
+        ).agg(
             question_text=("question_text", list),
             answer_text=("answer_text", list),
-            options=("options", list),
         )
+        empty = pd.read_csv("data/sql/empty_slides.csv")
+        empty["question_text"] = empty["question_text"].map(json.loads)
+        empty["answer_text"] = empty["answer_text"].map(json.loads)
+        grouping = pd.concat([grouping, empty])
         self.dataset = grouping
         self.img_dir = "data/slide_images"
         self.transform = transform
@@ -147,7 +179,7 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.dataset.iloc[idx]
-        img = f"data/pdf_images/{row['storage_path']}_{int(row['page_number'])}.png"
+        img = f"data/images/{row['storage_path']}+{int(row['page_number'])}.png"
         img = decode_image(img)
         label = []
         for i in range(len(row["question_text"])):
@@ -155,7 +187,6 @@ class CustomDataset(Dataset):
                 {
                     "question": row["question_text"][i],
                     "answer": row["answer_text"][i],
-                    "options": json.loads(row["options"][i]),
                 }
             )
         label = json.dumps(label)
@@ -178,9 +209,9 @@ def lora_train(
         task_type=TaskType.CAUSAL_LM,
     )
     peft_model = get_peft_model(model, config)
-    if REDUCE_SIZE:
-        peft_model.gradient_checkpointing_enable()  # reducdes size
-        peft_model.config.text_config.use_cache = False  # reduces size
+    if DEVICE != "cuda":
+        peft_model.gradient_checkpointing_enable()
+        peft_model.config.text_config.use_cache = False
     peft_model.train()
     optimizer = torch.optim.AdamW(
         (parameter for parameter in peft_model.parameters() if parameter.requires_grad),
@@ -199,44 +230,11 @@ def lora_train(
             optimizer.step()
             print(f"Step {i}, Loss {loss.item()}")
             print(f"Epoch: {i}, Step: {step}, Loss: {loss.item()}")
-            if REDUCE_SIZE:
+            if DEVICE != "cuda":
                 del batch, outputs, loss
                 torch.mps.empty_cache()
     peft_model.save_pretrained(ADAPTER_PATH)
     return peft_model
-
-
-def partial_train_model(
-    model: Qwen3VLForConditionalGeneration, dataloader: DataLoader
-) -> Qwen3VLForConditionalGeneration:
-    print("Parital full training")
-    for parameter in model.parameters():
-        parameter.requires_grad = False
-    for parameter in model.model.language_model.layers[-1].parameters():
-        parameter.requires_grad = True
-    model.train()
-    optimizer = torch.optim.AdamW(
-        (parameter for parameter in model.parameters() if parameter.requires_grad),
-        lr=1e-5,
-        eps=1e-4,
-    )
-    for i in range(10):  # epoch
-        it = iter(dataloader)
-        for j in range(8):  # trainign step
-            first = next(it)
-            first = first.to(DEVICE)
-            optimizer.zero_grad(set_to_none=True)
-            outputs = model(**first)  # forward pass
-            loss = outputs.loss
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-            print(f"Epoch {i}, Step {j}, Loss {loss.item()}")
-            if REDUCE_SIZE:
-                del first, outputs, loss
-                torch.mps.empty_cache()
-    model.save_pretrained(MODEL_PATH)
-    return model
 
 
 def inference(
@@ -280,6 +278,7 @@ def main():
         shuffle=False,
         collate_fn=partial(collate_fn, processor=processor),
     )
+    model = model.to(DEVICE)
     if load_existing:
         model = PeftModel.from_pretrained(model, ADAPTER_PATH)
     else:

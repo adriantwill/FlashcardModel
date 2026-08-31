@@ -10,7 +10,7 @@ wheels/
 .venv
 
 .DS_Store
-data/pdf_images
+data/images
 PROGRESS.md
 AGENTS.md
 model.pt
