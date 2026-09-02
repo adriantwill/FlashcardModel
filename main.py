@@ -1,24 +1,33 @@
 import json
 from functools import partial
+from pathlib import Path
 from typing import cast
 
 import pandas as pd
 import torch
-from peft import LoraConfig, PeftMixedModel, PeftModel, TaskType, get_peft_model
+from peft import (
+    LoraConfig,
+    PeftMixedModel,
+    PeftModel,
+    TaskType,
+    get_peft_model,
+    prepare_model_for_kbit_training,
+)
 from torch import Tensor
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, random_split
 from torchvision.io import decode_image
 from transformers import (
     AutoProcessor,
     BatchFeature,
+    BitsAndBytesConfig,
     Qwen3VLForConditionalGeneration,
     Qwen3VLProcessor,
 )
 
 MODEL_PATH = "model.pt"
-BASE_MODEL_NAME = "Qwen/Qwen3-VL-2B-Instruct"
-ADAPTER_PATH = "lora"
-DEVICE = torch.device(
+BASE_MODEL_NAME = "Qwen/Qwen3-VL-8B-Instruct"
+ADAPTER_PATH = "lora_8b_qlora"
+DEVICE = (
     "cuda"
     if torch.cuda.is_available()
     else "mps"
@@ -90,7 +99,7 @@ def partial_train_model(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             print(f"Epoch {i}, Step {j}, Loss {loss.item()}")
-            if DEVICE != "cuda":
+            if DEVICE == "mps":
                 del first, outputs, loss
                 torch.mps.empty_cache()
     model.save_pretrained(MODEL_PATH)
@@ -203,22 +212,26 @@ def lora_train(
     config = LoraConfig(
         r=16,
         lora_alpha=16,
-        target_modules=["q_proj", "v_proj"],
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+        ],
         lora_dropout=0.0,
         bias="none",
         task_type=TaskType.CAUSAL_LM,
     )
+    model = prepare_model_for_kbit_training(model)
     peft_model = get_peft_model(model, config)
-    if DEVICE != "cuda":
-        peft_model.gradient_checkpointing_enable()
-        peft_model.config.text_config.use_cache = False
+    peft_model.config.text_config.use_cache = False
     peft_model.train()
     optimizer = torch.optim.AdamW(
         (parameter for parameter in peft_model.parameters() if parameter.requires_grad),
         lr=1e-4,
         eps=1e-4,
     )
-    num_epochs = 2
+    num_epochs = 3
     for i in range(num_epochs):
         for step, batch in enumerate(dataloader):
             batch = batch.to(DEVICE)
@@ -230,7 +243,7 @@ def lora_train(
             optimizer.step()
             print(f"Step {i}, Loss {loss.item()}")
             print(f"Epoch: {i}, Step: {step}, Loss: {loss.item()}")
-            if DEVICE != "cuda":
+            if DEVICE == "mps":
                 del batch, outputs, loss
                 torch.mps.empty_cache()
     peft_model.save_pretrained(ADAPTER_PATH)
@@ -239,54 +252,69 @@ def lora_train(
 
 def inference(
     model: PeftModel | PeftMixedModel | Qwen3VLForConditionalGeneration,
-    image: Tensor,
+    images: list[Tensor],
     processor: Qwen3VLProcessor,
-) -> str:
+) -> list[str]:
     model.eval()
-    inputs_test = cast(
-        BatchFeature,
-        processor.apply_chat_template(
-            input_message(image),
-            tokenize=True,
-            return_dict=True,
-            return_tensors="pt",
-            padding=True,
-            add_generation_prompt=True,
-        ),
-    )
-    inputs_test = inputs_test.to(DEVICE)
-    generated_ids = model.generate(**inputs_test, max_new_tokens=512)
-    prompt_length = inputs_test["input_ids"].shape[1]
-    response_ids = generated_ids[:, prompt_length:]
-    print(f"Token count: {response_ids.shape[1]}")
-    output_text = processor.batch_decode(
-        response_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
-    )
-    return output_text
+    model.config.text_config.use_cache = True
+    output_texts = []
+    for image in images:
+        inputs_test = cast(
+            BatchFeature,
+            processor.apply_chat_template(
+                input_message(image),
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+                padding=True,
+                add_generation_prompt=True,
+            ),
+        )
+        inputs_test = inputs_test.to(DEVICE)
+        generated_ids = model.generate(**inputs_test, max_new_tokens=512)
+        prompt_length = inputs_test["input_ids"].shape[1]
+        response_ids = generated_ids[:, prompt_length:]
+        print(f"Token count: {response_ids.shape[1]}")
+        output_text = processor.batch_decode(
+            response_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
+        output_texts.append(output_text)
+    return output_texts
 
 
 def main():
     load_existing = True
     processor = AutoProcessor.from_pretrained(BASE_MODEL_NAME)
     dataset = CustomDataset()
+    quantization_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_compute_dtype=torch.bfloat16
+        if torch.cuda.is_bf16_supported()
+        else torch.float16,
+    )
     model = Qwen3VLForConditionalGeneration.from_pretrained(
-        BASE_MODEL_NAME, dtype=torch.bfloat16
+        BASE_MODEL_NAME, quantization_config=quantization_config
+    )
+    training_set, test_set = random_split(
+        dataset,
+        [len(dataset) - 50, 50],
+        generator=torch.Generator().manual_seed(42),
     )
     dataloader = DataLoader(
-        dataset,
-        batch_size=1,
+        training_set,
+        batch_size=2,
         shuffle=False,
         collate_fn=partial(collate_fn, processor=processor),
     )
-    model = model.to(DEVICE)
-    if load_existing:
+    if load_existing and Path(ADAPTER_PATH).is_dir():
         model = PeftModel.from_pretrained(model, ADAPTER_PATH)
+        output_text = inference(model, [test_set[0][0]], processor)
+        print(f"Expected text: {test_set[0][1]}")
+        print(f"Fine tuned text: {output_text[0]}")
     else:
         model = lora_train(model, dataloader)
-    model = model.to(DEVICE)
-    output_text = inference(model, dataset[0][0], processor)
-    print(f"Expected text: {dataset[0][1]}")
-    print(f"Fine tuned text: {output_text}")
 
 
 if __name__ == "__main__":

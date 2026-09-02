@@ -17,6 +17,7 @@ if __name__ == "__main__":
     uploads = uploads[uploads["storage_path"].isin(files)]
     questions = questions[questions["upload_id"].isin(uploads["id"].tolist())]
     questions = questions.dropna(subset=["page_number"])
+    question = questions[questions["deleted"] == False]
     questions["storage_path"] = questions["upload_id"].map(
         uploads.set_index("id")["storage_path"]
     )

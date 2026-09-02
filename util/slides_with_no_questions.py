@@ -9,6 +9,7 @@ def main():
     all_images = pd.DataFrame(
         (name.split("+") for name in path), columns=["storage_path", "page_number"]
     )
+    all_images = all_images[all_images["page_number"].isin(["1", "2", "3"])]
     df["img_dir"] = df["storage_path"] + "+" + df["page_number"].astype(int).astype(str)
     all_images["img_dir"] = (
         all_images["storage_path"]
