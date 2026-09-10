@@ -160,20 +160,26 @@ def collate_fn(
     return inputs_outputs_tokenize
 
 
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.dropna(subset=["question_text", "answer_text"])
+    df = df[df["deleted"] == False]
+    group_columns = ["storage_path", "page_number"]
+    df["chunk"] = df.groupby(group_columns, sort=False).cumcount() // 3
+    grouping = df.groupby(
+        group_columns + ["chunk"],
+        as_index=False,
+        sort=False,
+    ).agg(
+        question_text=("question_text", list),
+        answer_text=("answer_text", list),
+    )
+    return grouping
+
+
 class CustomDataset(Dataset):
     def __init__(self, transform=None, target_transform=None):
         df = pd.read_csv("data/sql/questions_rows.csv")
-        df = df.dropna(subset=["question_text", "answer_text"])
-        group_columns = ["storage_path", "page_number"]
-        df["chunk"] = df.groupby(group_columns, sort=False).cumcount() // 3
-        grouping = df.groupby(
-            group_columns + ["chunk"],
-            as_index=False,
-            sort=False,
-        ).agg(
-            question_text=("question_text", list),
-            answer_text=("answer_text", list),
-        )
+        grouping = clean_data(df)
         empty = pd.read_csv("data/sql/empty_slides.csv")
         empty["question_text"] = empty["question_text"].map(json.loads)
         empty["answer_text"] = empty["answer_text"].map(json.loads)
@@ -284,7 +290,7 @@ def inference(
 
 def main():
     load_existing = True
-    processor = AutoProcessor.from_pretrained(BASE_MODEL_NAME)
+    processor = AutoProcessor.from_pretrained(BASE_MODEL_NAME, max_pixels=1024 * 1024)
     dataset = CustomDataset()
     quantization_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -305,7 +311,7 @@ def main():
     dataloader = DataLoader(
         training_set,
         batch_size=2,
-        shuffle=False,
+        shuffle=True,
         collate_fn=partial(collate_fn, processor=processor),
     )
     if load_existing and Path(ADAPTER_PATH).is_dir():
