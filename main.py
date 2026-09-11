@@ -255,7 +255,7 @@ def inference(
 
 
 def main():
-    load_existing = False
+    load_existing = True
     model_name = "Qwen/Qwen3-VL-8B-Instruct"
     processor = AutoProcessor.from_pretrained(model_name, max_pixels=1024 * 1024)
     dataset = CustomDataset()
