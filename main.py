@@ -25,15 +25,11 @@ from transformers import (
 )
 
 MODEL_PATH = "model.pt"
-BASE_MODEL_NAME = "Qwen/Qwen3-VL-8B-Instruct"
 ADAPTER_PATH = "lora_8b_qlora"
-DEVICE = (
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_available()
-    else "cpu"
+BASE_MODEL_NAME = (
+    "Qwen/Qwen3-VL-8B-Instruct" if DEVICE == "cuda" else "Qwen/Qwen3-VL-8B-Instruct"
 )
+CHECKPOINT_PATH = "/workspace/flashcard-generator/checkpoint_path"
 
 
 def input_message(img: Tensor):
@@ -71,39 +67,6 @@ Return JSON array only:
             ],
         }
     ]
-
-
-def partial_train_model(
-    model: Qwen3VLForConditionalGeneration, dataloader: DataLoader
-) -> Qwen3VLForConditionalGeneration:
-    print("Parital full training")
-    for parameter in model.parameters():
-        parameter.requires_grad = False
-    for parameter in model.model.language_model.layers[-1].parameters():
-        parameter.requires_grad = True
-    model.train()
-    optimizer = torch.optim.AdamW(
-        (parameter for parameter in model.parameters() if parameter.requires_grad),
-        lr=1e-5,
-        eps=1e-4,
-    )
-    for i in range(10):  # epoch
-        it = iter(dataloader)
-        for j in range(8):  # trainign step
-            first = next(it)
-            first = first.to(DEVICE)
-            optimizer.zero_grad(set_to_none=True)
-            outputs = model(**first)  # forward pass
-            loss = outputs.loss
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-            print(f"Epoch {i}, Step {j}, Loss {loss.item()}")
-            if DEVICE == "mps":
-                del first, outputs, loss
-                torch.mps.empty_cache()
-    model.save_pretrained(MODEL_PATH)
-    return model
 
 
 def collate_fn(
@@ -229,7 +192,13 @@ def lora_train(
         task_type=TaskType.CAUSAL_LM,
     )
     model = prepare_model_for_kbit_training(model)
-    peft_model = get_peft_model(model, config)
+    checkpoint = Path(CHECKPOINT_PATH) / "adapter_config.json"
+    if checkpoint.is_file():
+        peft_model = PeftModel.from_pretrained(
+            model, CHECKPOINT_PATH, is_trainable=True
+        )
+    else:
+        peft_model = get_peft_model(model, config)
     peft_model.config.text_config.use_cache = False
     peft_model.train()
     optimizer = torch.optim.AdamW(
@@ -240,18 +209,19 @@ def lora_train(
     num_epochs = 3
     for i in range(num_epochs):
         for step, batch in enumerate(dataloader):
-            batch = batch.to(DEVICE)
+            batch = batch.to("cuda")
             optimizer.zero_grad(set_to_none=True)
-            outputs = peft_model(**batch)  # forward pass
-            loss = outputs.loss
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                outputs = peft_model(**batch)  # forward pass
+                loss = outputs.loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(peft_model.parameters(), max_norm=1.0)
             optimizer.step()
             print(f"Step {i}, Loss {loss.item()}")
             print(f"Epoch: {i}, Step: {step}, Loss: {loss.item()}")
-            if DEVICE == "mps":
-                del batch, outputs, loss
-                torch.mps.empty_cache()
+            if step % 200 == 0:
+                peft_model.save_pretrained(CHECKPOINT_PATH)
+        peft_model.save_pretrained(CHECKPOINT_PATH)
     peft_model.save_pretrained(ADAPTER_PATH)
     return peft_model
 
@@ -276,7 +246,7 @@ def inference(
                 add_generation_prompt=True,
             ),
         )
-        inputs_test = inputs_test.to(DEVICE)
+        inputs_test = inputs_test.to("cuda")
         generated_ids = model.generate(**inputs_test, max_new_tokens=512)
         prompt_length = inputs_test["input_ids"].shape[1]
         response_ids = generated_ids[:, prompt_length:]
@@ -289,19 +259,18 @@ def inference(
 
 
 def main():
-    load_existing = True
-    processor = AutoProcessor.from_pretrained(BASE_MODEL_NAME, max_pixels=1024 * 1024)
+    load_existing = False
+    model_name = "Qwen/Qwen3-VL-8B-Instruct"
+    processor = AutoProcessor.from_pretrained(model_name, max_pixels=1024 * 1024)
     dataset = CustomDataset()
     quantization_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
         bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.bfloat16
-        if torch.cuda.is_bf16_supported()
-        else torch.float16,
+        bnb_4bit_compute_dtype=torch.bfloat16,
     )
     model = Qwen3VLForConditionalGeneration.from_pretrained(
-        BASE_MODEL_NAME, quantization_config=quantization_config
+        model_name, quantization_config=quantization_config
     )
     training_set, test_set = random_split(
         dataset,
