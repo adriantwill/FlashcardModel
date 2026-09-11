@@ -24,11 +24,7 @@ from transformers import (
     Qwen3VLProcessor,
 )
 
-MODEL_PATH = "model.pt"
 ADAPTER_PATH = "lora_8b_qlora"
-BASE_MODEL_NAME = (
-    "Qwen/Qwen3-VL-8B-Instruct" if DEVICE == "cuda" else "Qwen/Qwen3-VL-8B-Instruct"
-)
 CHECKPOINT_PATH = "/workspace/flashcard-generator/checkpoint_path"
 
 

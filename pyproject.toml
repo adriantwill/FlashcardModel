@@ -6,15 +6,15 @@ readme = "README.md"
 authors = [
     { name = "adriantwill", email = "142526523+adriantwill@users.noreply.github.com" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "accelerate>=1.10.1",
     "bitsandbytes>=0.50.1",
     "pandas>=2.3.3",
     "peft>=0.20.0",
     "pymupdf>=1.28.2",
-    "torch>=2.8.0",
-    "torchvision>=0.23.0",
+    "torch==2.8.0",
+    "torchvision==0.23.0",
     "transformers>=4.57.6",
 ]
 
@@ -29,3 +29,16 @@ flashcard-generator = "flashcard_generator:main"
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu128", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+  { index = "pytorch-cu128", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
