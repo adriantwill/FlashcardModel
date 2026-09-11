@@ -200,7 +200,7 @@ def lora_train(
     optimizer = torch.optim.AdamW(
         (parameter for parameter in peft_model.parameters() if parameter.requires_grad),
         lr=1e-4,
-        eps=1e-4,
+        eps=1e-6,
     )
     num_epochs = 3
     for i in range(num_epochs):
